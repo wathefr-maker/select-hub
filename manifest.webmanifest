@@ -1,0 +1,16 @@
+{
+  "name": "Hub Select",
+  "short_name": "Hub Select",
+  "description": "Hub réseaux sociaux de Select by Thibaud, Vichy",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#151413",
+  "theme_color": "#151413",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
