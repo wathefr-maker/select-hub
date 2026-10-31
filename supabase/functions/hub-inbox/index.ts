@@ -179,12 +179,14 @@ async function run(opts: { regen?: string; probe?: boolean }) {
   const ids = found.map((f) => f.ext_id);
   const known = new Set(((await admin.from("hub_messages").select("ext_id").in("ext_id", ids.length ? ids : ["-"])).data || []).map((r: any) => r.ext_id));
   const fresh = found.filter((f) => !known.has(f.ext_id));
-  let ai = 0;
+  let ai = 0, added = 0;
   for (const f of fresh) {
     let s: any = null;
     try { s = await suggest(f, store); } catch (e) { report.ai = (e as Error).message; }
     if (s) ai++;
-    await admin.from("hub_messages").insert({ ...f, type: s?.type || "autre", reply: s?.reply || null, ai_at: s ? now.toISOString() : null, status: "a_repondre", created_at: f.received_at });
+    const ins = await admin.from("hub_messages").insert({ ...f, type: s?.type || "autre", reply: s?.reply || null, ai_at: s ? now.toISOString() : null, status: "a_repondre", created_at: f.received_at });
+    if (ins.error) { report.insert = ins.error.message; continue; }
+    added++;
   }
   // Messages restés sans proposition (IA pas encore branchée au moment du relevé) : on complète, 10 par passage.
   if (Deno.env.get("ANTHROPIC_API_KEY")) {
@@ -194,7 +196,7 @@ async function run(opts: { regen?: string; probe?: boolean }) {
       catch (e) { report.ai = (e as Error).message; break; }
     }
   }
-  report.new = fresh.length;
+  report.new = added;
   report.ai = report.ai || ai;
   await admin.from("hub_settings").upsert({ key: "inbox_sync", value: { at: now.toISOString(), report, ai: !!Deno.env.get("ANTHROPIC_API_KEY") }, updated_at: now.toISOString() });
   return report;
