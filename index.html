@@ -440,7 +440,7 @@ function viewAll(){
   const m=monday(new Date());
   return `<div class="pagehead"><div><div class="eyebrow">Vue d’ensemble</div><h1>${esc(weekLabel(m))}</h1><p>Les quatre réseaux de Select, au même endroit.</p></div><button class="btn primary" data-a="new">Nouveau post</button></div>`
    +kpiStrip(NETS.map(n=>n.k))
-   +`<div class="desk"><div class="stack">${calendarCard()}${recapCard()}</div><div class="stack">${todayCard()}${approveCard()}${connCard()}${ideasCard()}${teamCard()}</div></div>`;
+   +`<div class="desk"><div class="stack">${calendarCard()}${recapCard()}</div><div class="stack">${todayCard()}${approveCard()}${connCard()}${storeCard()}${ideasCard()}${teamCard()}</div></div>`;
 }
 function calendarCard(){
   const y=cal.getFullYear(),mo=cal.getMonth();const start=monday(new Date(y,mo,1));const last=new Date(y,mo+1,0);
@@ -543,18 +543,30 @@ function boardCard(k){
 }
 function pinNote(){return `<section class="card"><div class="sechead"><h2>Messages</h2></div><p class="empty">Pinterest n’a quasiment pas de messagerie. Le travail se fait sur les épingles et les tableaux : un bon titre, une bonne description et un lien vers la fiche produit.</p></section>`}
 function msgCard(k){
-  const ms=[...S.messages.filter(m=>m.net===k)].sort((a,b)=>(a.status==='repondu')-(b.status==='repondu')||(b.created_at||'').localeCompare(a.created_at||''));
-  const open=ms.filter(m=>m.status!=='repondu').length;
+  const ms=[...S.messages.filter(m=>m.net===k)].sort((a,b)=>(a.status==='repondu')-(b.status==='repondu')||(b.received_at||b.created_at||'').localeCompare(a.received_at||a.created_at||''));
+  const open=ms.filter(m=>m.status!=='repondu').length,sync=setting('inbox_sync');
+  const when=m=>{const d=m.received_at||m.created_at;return d?new Date(d).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''};
+  const link=m=>k==='ig'&&m.kind==='dm'&&m.from_handle?.startsWith('@')?`<a class="btn sm ghost" href="https://ig.me/m/${encodeURIComponent(m.from_handle.slice(1))}" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir la conversation</a>`:'';
+  const src=k==='ig'?'messages privés et commentaires Instagram':k==='tt'?'commentaires TikTok':k==='fb'?'commentaires Facebook':'';
   return `<section class="card"><div class="sechead"><h2>Messages & commentaires</h2><small>${open} à traiter</small></div>
-   <form data-f="msg" data-net="${k}" style="display:grid;gap:8px;margin-bottom:14px">
+   ${src?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px"><span class="hint" style="flex:1">Relevé automatique toutes les 10 min (${src})${sync?.at?` · dernier relevé ${ago(sync.at)}`:''}. ${sync&&!sync.ai?'<b>Réponses IA : clé à ajouter (voir onglet Tout → Infos boutique).</b>':'Une réponse est proposée par l’IA pour chaque message.'}</span><button class="btn sm" data-a="inboxsync">Relever maintenant</button></div>`:''}
+   <div class="list">${ms.length?ms.map(m=>`<div class="msg ${m.status==='repondu'?'done':''}"><div class="who"><span class="tag">${esc(MTL[m.type]||'Autre')}</span>${m.kind?`<span class="tag">${m.kind==='dm'?'Message privé':'Commentaire'}</span>`:''}<b>${esc(m.from_handle||'Anonyme')}</b><span>${when(m)}</span></div>
+     <p class="q" style="white-space:pre-line">${esc(m.text)}</p>${m.context?`<details><summary class="hint" style="cursor:pointer">${m.kind==='dm'?'Échange précédent':'Publication commentée'}</summary><p class="hint" style="white-space:pre-line;margin:4px 0 0">${esc(m.context)}</p></details>`:''}
+     <textarea id="reply-${m.id}" data-keep data-reply="${m.id}" placeholder="${sync?.ai===false?'Réponse à écrire (l’IA proposera dès que sa clé sera ajoutée)':'Réponse proposée par l’IA…'}">${esc(m.reply||'')}</textarea>
+     <div class="acts"><button class="btn sm" data-a="copyreply" data-id="${m.id}">Copier la réponse</button><button class="btn sm ghost" data-a="regen" data-id="${m.id}">${m.reply?'Autre proposition':'Proposer une réponse'}</button>${link(m)}<button class="btn sm ${m.status==='repondu'?'':'primary'}" data-a="msgdone" data-id="${m.id}">${m.status==='repondu'?'Rouvrir':'Marquer répondu'}</button><button class="btn sm ghost" data-a="delmsg" data-id="${m.id}" aria-label="Supprimer">×</button></div></div>`).join(''):`<p class="empty">${src?'Aucun message pour l’instant. Les nouveaux arrivent ici tout seuls.':'Pinterest n’a pas de messagerie à relever.'}</p>`}</div>
+   <details style="margin-top:12px"><summary class="hint" style="cursor:pointer">Ajouter un message à la main (WhatsApp, téléphone, message Facebook…)</summary>
+   <form data-f="msg" data-net="${k}" style="display:grid;gap:8px;margin-top:10px">
      <div class="frow"><label class="f">De<input type="text" id="m-from-${k}" data-keep placeholder="@pseudo"></label><label class="f">Sujet<select id="m-type-${k}">${MT.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}</select></label></div>
      <label class="f">Message reçu<textarea id="m-text-${k}" data-keep placeholder="Collez le message ici" style="min-height:60px"></textarea></label>
-     <div><button class="btn" type="submit">Ajouter au récap</button></div>
-   </form>
-   <div class="list">${ms.length?ms.map(m=>`<div class="msg ${m.status==='repondu'?'done':''}"><div class="who"><span class="tag">${esc(MTL[m.type]||'Autre')}</span><b>${esc(m.from_handle||'Anonyme')}</b><span>${m.created_at?new Date(m.created_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}):''}</span></div>
-     <p class="q">${esc(m.text)}</p>
-     <textarea id="reply-${m.id}" data-keep data-reply="${m.id}" placeholder="Réponse proposée (Claude la prépare, vous ajustez)">${esc(m.reply||'')}</textarea>
-     <div class="acts"><button class="btn sm" data-a="copyreply" data-id="${m.id}">Copier la réponse</button><button class="btn sm ${m.status==='repondu'?'':'primary'}" data-a="msgdone" data-id="${m.id}">${m.status==='repondu'?'Rouvrir':'Marquer répondu'}</button><button class="btn sm ghost" data-a="delmsg" data-id="${m.id}" aria-label="Supprimer">×</button></div></div>`).join(''):'<p class="empty">Collez ici les messages qui demandent une réponse. Je prépare les brouillons, vous répondez depuis l’appli.</p>'}</div></section>`;
+     <div><button class="btn" type="submit">Ajouter</button></div>
+   </form></details></section>`;
+}
+function storeCard(){
+  const st=setting('store_info')?.text||'',sync=setting('inbox_sync');
+  return `<section class="card"><div class="sechead"><h2>Infos boutique pour l’IA</h2><small>${sync?.ai?'IA active':'IA : clé à ajouter'}</small></div>
+   <p class="hint" style="margin:0 0 8px">L’IA s’appuie sur ces infos et sur le stock du site pour proposer les réponses. Elle n’invente rien qui n’est pas écrit ici : complétez les [à compléter].</p>
+   <form data-f="store" style="display:grid;gap:8px"><textarea id="store-text" data-keep style="min-height:150px">${esc(st)}</textarea><div><button class="btn" type="submit">Enregistrer</button></div></form>
+   ${sync&&!sync.ai?'<p class="hint" style="margin:8px 0 0">Pour activer les réponses IA : ajoutez le secret <b>ANTHROPIC_API_KEY</b> dans Supabase (Edge Functions → Secrets), comme pour PostFast.</p>':''}</section>`;
 }
 function statsCard(k){
   const weeks=[...Array(8)].map((_,i)=>isoWeek(weekOffset(i-7)));
@@ -865,6 +877,8 @@ document.addEventListener('click',async e=>{
   else if(a==='mchoose'){readEditor();const k=b.dataset.k,x=SOUNDS[k+':'+b.dataset.id];if(!x)return;draft.music={...(draft.music||{}),[k]:{id:x.id,title:x.title,artist:x.artist,cover:x.cover,preview:x.preview,duration:x.duration,...(k==='ig'?{video:'couper'}:{})}};musicPick=null;stopPreview();renderEditor();toast('Musique choisie : '+x.title+'. Pensez à enregistrer.')}
   else if(a==='mclear'){readEditor();if(draft.music){delete draft.music[b.dataset.k];if(!Object.keys(draft.music).length)draft.music=null}renderEditor()}
   else if(a==='igmdisc')guard(async()=>{const r=await sb.functions.invoke('hub-music',{body:{action:'ig_disconnect'}});if(r.error)throw r.error;await loadTable('connections');toast('Musique Instagram déconnectée')});
+  else if(a==='inboxsync'){b.disabled=true;b.textContent='Relevé…';try{const r=await sb.functions.invoke('hub-inbox',{body:{}});if(r.error){let msg=r.error.message;try{msg=(await r.error.context.json()).error||msg}catch(_){}toast(msg);return}await Promise.all(['messages','settings'].map(loadTable));const n=r.data?.new||0;toast(n?`${n} nouveau${n>1?'x':''} message${n>1?'s':''}`:'Rien de nouveau')}finally{b.disabled=false;b.textContent='Relever maintenant'}}
+  else if(a==='regen'){b.disabled=true;const t0=b.textContent;b.textContent='L’IA réfléchit…';try{const r=await sb.functions.invoke('hub-inbox',{body:{regen:id}});if(r.error){let msg=r.error.message;try{msg=(await r.error.context.json()).error||msg}catch(_){}toast(msg);return}await loadTable('messages');toast('Nouvelle proposition prête')}finally{b.disabled=false;b.textContent=t0}}
   else if(a==='statsync'){b.disabled=true;b.textContent='Récupération…';try{const r=await sb.functions.invoke('hub-stats',{body:{}});if(r.error){let msg=r.error.message;try{msg=(await r.error.context.json()).error||msg}catch(_){}toast(msg);return}await Promise.all(['kpis','posts','settings'].map(loadTable));toast('Statistiques à jour')}finally{b.disabled=false;b.textContent='Actualiser les stats'}}
   else if(a==='pubretry')setPublished(b.dataset.k,null);
   else if(a==='pubmanual')setPublished(b.dataset.k,{done:true,manual:true,at:nowIso()});
@@ -897,6 +911,7 @@ document.addEventListener('submit',async e=>{
       if(r.error){let msg=r.error.message;try{msg=(await r.error.context.json()).error||msg}catch(_){}toast(msg);return}
       v('cn-igm').value='';await loadTable('connections');toast(r.data.music?`Musique Instagram connectée : ${r.data.account}`:`Connecté (${r.data.account}), mais la bibliothèque musicale ne répond pas encore`)}
     finally{btn.disabled=false;btn.textContent='Connecter'}}
+  if(t==='store'){const x=v('store-text').value.trim();await guard(async()=>{ok(await T('settings').upsert({key:'store_info',value:{text:x},updated_at:nowIso()},{onConflict:'key'}));await loadTable('settings');toast('Infos boutique enregistrées')})}
   if(t==='newpass'){const pw=v('np-pass').value;if(pw.length<8){toast('8 caractères minimum');return}const r=await sb.auth.updateUser({password:pw});if(r.error){toast('Échec : '+r.error.message);return}toast('Mot de passe enregistré');recovery=false;start()}
 });
 document.addEventListener('focusout',e=>{const id=e.target.dataset?.reply;if(!id||!sb||S.status!=='ready')return;const m=S.messages.find(x=>x.id===id);if(m&&(m.reply||'')!==e.target.value){m.reply=e.target.value;T('messages').update({reply:e.target.value}).eq('id',id).then(r=>{if(r.error)toast('Réponse non enregistrée')})}});
