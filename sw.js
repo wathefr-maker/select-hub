@@ -1,5 +1,5 @@
 // Service worker : l'appli s'ouvre même sans réseau (dernière version connue), les données restent en ligne.
-const CACHE = 'hub-select-v2';
+const CACHE = 'hub-select-v3';
 const SHELL = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

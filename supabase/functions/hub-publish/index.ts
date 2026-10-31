@@ -1,13 +1,16 @@
 // hub-publish : lancée toutes les 5 minutes par une tâche planifiée (pg_cron).
-// Publie sur Instagram et Facebook les posts « Programmé » dont l'heure est passée (heure de Paris),
+// Avec une clé PostFast : publie sur les 4 réseaux via PostFast. Sinon : Instagram et Facebook en direct (Meta).
+// Publie les posts « Programmé » dont l'heure est passée (heure de Paris),
 // suit chaque réseau dans hub_posts.published, et renouvelle le jeton Instagram avant expiration.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { FB, get, IG, igWaitFinished, MetaError, post } from "../_shared/meta.ts";
+import * as PFX from "../_shared/postfast.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(SB_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const BUCKET = "hub-visuels";
-const AUTO = ["ig", "fb"]; // réseaux publiés automatiquement pour l'instant
+const PF_ON = !!PFX.pfKey();
+const AUTO = PF_ON ? ["ig", "fb", "tt", "pin"] : ["ig", "fb"];
 const MAX_ATTEMPTS = 3;
 
 type Media = { url: string; video: boolean };
@@ -89,6 +92,46 @@ async function fbStep(p: any, tok: any): Promise<Pub> {
   return { done: true, id, url: info.permalink_url || null, at: new Date().toISOString() };
 }
 
+/* ---------------- PostFast ---------------- */
+async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any): Promise<Pub> {
+  if (state.stage === "postfast") {
+    const s = await PFX.postState(state.pf_id, conn.account_id);
+    if (s.state === "done") return { done: true, via: "postfast", pf_id: state.pf_id, url: s.url || null, draft: state.draft || false, at: new Date().toISOString() };
+    if (s.state === "error") throw new PFX.PfError(s.error || "Échec côté PostFast.");
+    return state;
+  }
+  const media = mediaFor(p, net);
+  if ((net === "ig" || net === "tt" || net === "pin") && !media.length) throw new PFX.PfError(`${net === "ig" ? "Instagram" : net === "tt" ? "TikTok" : "Pinterest"} demande au moins une photo ou une vidéo.`);
+  const items = [];
+  for (let i = 0; i < media.length; i++) {
+    const path = decodeURIComponent(media[i].url.split(`/${BUCKET}/`)[1] || "");
+    const up = await PFX.upload(media[i].url, path);
+    items.push({ key: up.key, type: up.type, sortOrder: i });
+  }
+  const oneVideo = media.length === 1 && media[0].video;
+  const caption = p.captions?.[net] || "";
+  const controls: Record<string, unknown> = {};
+  const draft = net === "tt" && (p.send?.tt || "brouillon") === "brouillon";
+  if (net === "ig") controls.instagramPublishType = oneVideo ? "REEL" : "TIMELINE";
+  if (net === "fb") controls.facebookContentType = oneVideo ? "REEL" : "POST";
+  if (net === "tt") { controls.tiktokIsDraft = draft; const title = caption.split("\n")[0].slice(0, 90); if (title) controls.tiktokTitle = title; }
+  let content = caption;
+  if (net === "pin") {
+    const board = settings?.pinterest_board?.id;
+    if (!board) throw new PFX.PfError("Choisissez un tableau Pinterest dans « Réseaux connectés ».");
+    controls.pinterestBoardId = board;
+    const link = (caption.match(/https?:\/\/\S+/) || [])[0];
+    if (link) { controls.pinterestLink = link; content = caption.replace(link, "").trim(); }
+  }
+  const r = await PFX.pf("POST", "/social-posts", {
+    posts: [{ content, socialMediaId: conn.account_id, scheduledAt: new Date(Date.now() + 120000).toISOString(), mediaItems: items }],
+    controls,
+  });
+  const id = (r?.postIds || [])[0];
+  if (!id) throw new PFX.PfError("PostFast n'a pas confirmé la création du post.");
+  return { stage: "postfast", pf_id: id, draft, at: new Date().toISOString() };
+}
+
 /* ---------------- Jeton Instagram ---------------- */
 async function refreshInstagram(tok: any) {
   const left = tok.expires_at ? new Date(tok.expires_at).getTime() - Date.now() : 0;
@@ -105,7 +148,9 @@ async function refreshInstagram(tok: any) {
 async function run() {
   const report: any[] = [];
   const toks = Object.fromEntries(((await admin.from("hub_tokens").select("*")).data || []).map((r: any) => [r.net, r]));
-  if (toks.ig) {
+  const conns = Object.fromEntries(((await admin.from("hub_connections").select("*").eq("via", "postfast")).data || []).map((r: any) => [r.net, r]));
+  const settings = Object.fromEntries(((await admin.from("hub_settings").select("*")).data || []).map((r: any) => [r.key, r.value]));
+  if (toks.ig && !PF_ON) {
     try { toks.ig = await refreshInstagram(toks.ig); }
     catch (e) { await admin.from("hub_connections").update({ last_error: "Renouvellement du jeton : " + (e as Error).message }).eq("net", "ig"); }
   }
@@ -116,12 +161,15 @@ async function run() {
     const published: Pub = { ...(p.published || {}) };
     let changed = false;
     for (const net of (p.networks || []).filter((n: string) => AUTO.includes(n))) {
-      if ((p.send?.[net] || "direct") !== "direct") continue;
+      const mode = p.send?.[net] || (net === "tt" ? "brouillon" : "direct");
+      if (mode === "manuel" || (!PF_ON && mode !== "direct")) continue;
       const st = published[net] || {};
       if (st.done || (st.error && (st.attempts || 0) >= MAX_ATTEMPTS)) continue;
-      if (!toks[net]) { published[net] = { ...st, error: "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
+      const ready = PF_ON ? conns[net] : toks[net];
+      if (!ready) { published[net] = { ...st, error: PF_ON ? "Compte absent de PostFast : connectez-le dans PostFast puis cliquez sur Actualiser." : "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
       try {
-        const next = net === "ig" ? await igStep(p, st.error ? {} : st, toks.ig) : await fbStep(p, toks.fb);
+        const base = st.error ? {} : st;
+        const next = PF_ON ? await pfStep(p, net, base, conns[net], settings) : net === "ig" ? await igStep(p, base, toks.ig) : await fbStep(p, toks.fb);
         published[net] = next; changed = true;
         report.push({ post: p.id, net, result: next.done ? "publié" : next.stage });
       } catch (e) {
@@ -134,7 +182,7 @@ async function run() {
     const allDone = (p.networks || []).every((n: string) => published[n]?.done);
     await admin.from("hub_posts").update({ published, ...(allDone ? { status: "publie" } : {}), updated_at: new Date().toISOString() }).eq("id", p.id);
   }
-  await admin.from("hub_connections").update({ last_run_at: new Date().toISOString() }).in("net", Object.keys(toks));
+  await admin.from("hub_connections").update({ last_run_at: new Date().toISOString() }).in("net", PF_ON ? Object.keys(conns) : Object.keys(toks));
   return report;
 }
 

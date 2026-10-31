@@ -323,7 +323,7 @@ const REPERES={
  tt:[['Vidéo et photos','Vertical 9:16 (1080×1920). Un carrousel devient un post photo qui défile, jusqu’à 35 images.'],['Son','Le son tendance se choisit dans l’appli au moment de publier.'],['Légende','Courte, 3 à 5 hashtags. Le texte à l’écran compte plus que la légende.'],['Rythme','Changer de plan toutes les 2 à 3 secondes.']],
  pin:[['Format','Vertical 2:3 (1000×1500). Une image propre, peu de texte.'],['Titre','Les mots que les gens cherchent : « sneakers New Balance 2002R tenue ».'],['Lien','Chaque épingle renvoie vers la fiche produit du site.'],['Tableaux','Un tableau par marque, univers ou saison.']]};
 
-const S={posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],fbPages:null,status:'loading'};
+const S={posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],settings:[],fbPages:null,pfKey:null,pinBoards:null,status:'loading'};
 let sb=null,me={id:null,name:''},canWrite=true,recovery=false,installEvt=null;
 const BUCKET='hub-visuels';
 S.members=[];
@@ -364,7 +364,9 @@ const vurl=v=>v.path?sb.storage.from(BUCKET).getPublicUrl(v.path).data.publicUrl
 const nowIso=()=>new Date().toISOString();
 const isVid=v=>/\.(mp4|mov)$/i.test(v.path||'');
 const AUTO=['ig','fb'];
-const isAuto=(p,k)=>AUTO.includes(k)&&(p.send?.[k]||'direct')==='direct';
+const sendMode=(p,k)=>p.send?.[k]||(k==='tt'?'brouillon':'direct');
+const isAuto=(p,k)=>S.pfKey?sendMode(p,k)!=='manuel':AUTO.includes(k)&&sendMode(p,k)==='direct';
+const setting=k=>(S.settings.find(x=>x.key===k)||{}).value;
 const ago=iso=>{if(!iso)return 'jamais';const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?'à l’instant':m<60?`il y a ${m} min`:m<1440?`il y a ${Math.round(m/60)} h`:`il y a ${Math.round(m/1440)} j`};
 const fmtDate=iso=>iso?new Date(iso).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
 function pubTags(p){return (p.networks||[]).map(k=>{const s=p.published?.[k];if(!s)return '';if(s.error)return `<span class="tag" style="color:var(--pin)">${esc(NET[k].name)} : échec</span>`;if(s.done&&p.status!=='publie')return `<span class="tag" style="color:var(--s-valide)">${esc(NET[k].name)} : publié</span>`;return ''}).join('')}
@@ -450,6 +452,7 @@ function approveCard(){
    <p class="hint" style="margin-top:10px">Post simple : un feu vert suffit. Les autres en demandent deux.</p></section>`;
 }
 function connCard(){
+  if(S.pfKey)return pfCard();
   const row=k=>{const c=S.connections.find(x=>x.net===k),n=NET[k];
     if(k==='tt'||k==='pin')return `<div class="conn"><div class="h"><span><i class="dot ${k}"></i> <b>${n.name}</b></span><span class="st">Étape suivante</span></div></div>`;
     const exp=c?.expires_at?(new Date(c.expires_at)-Date.now())/864e5:null;
@@ -460,6 +463,18 @@ function connCard(){
   const last=S.connections.map(c=>c.last_run_at).filter(Boolean).sort().pop();
   return `<section class="card"><div class="sechead"><h2>Réseaux connectés</h2><small>Robot : ${ago(last)}</small></div>${['ig','fb','tt','pin'].map(row).join('')}
    <p class="hint" style="margin:8px 0 0">Les jetons sont vérifiés puis rangés côté serveur. Ils ne s’affichent plus jamais, ici comme ailleurs.</p></section>`;
+}
+function pfCard(){
+  const last=S.connections.map(c=>c.last_run_at).filter(Boolean).sort().pop();
+  const board=setting('pinterest_board');
+  const boards=S.pinBoards||(board?[board]:[]);
+  const row=k=>{const c=S.connections.find(x=>x.net===k&&x.via==='postfast'),n=NET[k];
+    const st=c?`<span class="st ${c.last_error?'err':'ok'}">${c.last_error?esc(c.last_error):'Connecté : '+esc(c.account_name||'')}</span>`:'<span class="st err">Pas encore trouvé dans PostFast</span>';
+    const pin=k==='pin'&&c?`<label class="f">Tableau Pinterest pour les épingles<select id="pin-board" data-a-change="pinboard">${boards.length?'':'<option value="">Cliquez sur Actualiser pour charger vos tableaux</option>'}${boards.map(b=>`<option value="${esc(b.id)}" ${board?.id===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select></label>`:'';
+    return `<div class="conn"><div class="h"><span><i class="dot ${k}"></i> <b>${n.name}</b></span>${k==='tt'?'<span class="tag">brouillon par défaut</span>':''}</div>${st}${pin}</div>`};
+  return `<section class="card"><div class="sechead"><h2>Réseaux connectés</h2><small>via PostFast · robot : ${ago(last)}</small></div>${['ig','fb','tt','pin'].map(row).join('')}
+   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-a="pfsync">Actualiser depuis PostFast</button><a class="btn sm ghost" href="https://app.postfa.st" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir PostFast</a></div>
+   <p class="hint" style="margin:8px 0 0">Les comptes se connectent dans PostFast. Après un ajout ou une reconnexion, cliquez sur Actualiser.</p></section>`;
 }
 function teamCard(){
   return `<section class="card"><div class="sechead"><h2>Équipe</h2><small>${S.members.length} accès</small></div>
@@ -552,7 +567,7 @@ function renderEditor(){
     <label class="check" style="justify-self:start"><input type="checkbox" id="e-simple" data-rerender ${p.simple?'checked':''}>Post simple : une seule validation suffit</label></section>
    ${p.id&&['a_valider','valide','programme','publie'].includes(p.status)?`<div class="valbox ${n>=nd?'ok':''}"><div><b class="count">${n}/${nd}</b> validation${nd>1?'s':''} <div class="who-list">${Object.keys(vals).map(u=>`<span class="tag" data-uid="${esc(u)}">…</span>`).join('')||'<span class="hint">Personne pour l’instant</span>'}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${['a_valider','valide'].includes(p.status)?`<button class="btn ${mine||n>=nd?'':'primary'}" data-a="validate" data-id="${p.id}">${mine?'Retirer ma validation':'Je valide'}</button>`:''}${p.status==='valide'&&n>=nd?`<button class="btn primary" data-a="program">Programmer la publication</button>`:''}</div></div>`:''}
    ${visualsSection(p)}
-   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r"><select id="e-send-${k}" aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header><textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
+   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">${S.pfKey?'Une fois le post <b>Programmé</b>, chaque réseau part tout seul à l’heure prévue, selon le choix d’envoi. TikTok en brouillon arrive dans l’appli TikTok pour la finition. « Je publie à la main » ne part pas : cliquez ensuite sur « Marquer publié ».':'Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».'}</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r"><select id="e-send-${k}" aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header><textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
    <section><label class="f">Brief / fiche de tournage<textarea id="e-notes" placeholder="Quoi filmer, quels plans, combien de secondes, quelle paire…" style="min-height:120px">${esc(p.notes)}</textarea></label></section>
    ${p.status==='publie'&&p.networks.length?`<section><h2>Statistiques du post</h2><div class="statgrid"><div class="r hint"><span></span>${STATF.map(([,l])=>`<span>${l}</span>`).join('')}</div>${p.networks.map(k=>`<div class="r"><b><i class="dot ${k}"></i>${NET[k].name}</b>${STATF.map(([f,l])=>`<input type="number" min="0" id="e-st-${k}-${f}" aria-label="${l} ${NET[k].name}" value="${p.stats?.[k]?.[f]??''}">`).join('')}</div>`).join('')}</div></section>`:''}
    <div class="footbar">${p.id?`<button class="btn danger" data-a="delpost">${confirmDel?'Confirmer la suppression':'Supprimer'}</button>`:'<span></span>'}<div style="display:flex;gap:8px"><button class="btn" data-a="close">Annuler</button><button class="btn primary" data-a="save">Enregistrer</button></div></div></div>`;
@@ -566,11 +581,12 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&draft)closeEditor()});
 function pubState(p,k){
   if(!p.id||!['valide','programme','publie'].includes(p.status))return '';
   const s=p.published?.[k]||{},auto=isAuto(p,k),conn=S.connections.find(c=>c.net===k);
+  if(s.done&&s.draft)return `<div class="pubst ok">Brouillon envoyé dans TikTok le ${fmtDate(s.at)} : ouvrez l’appli TikTok pour ajouter le son et publier.</div>`;
   if(s.done)return `<div class="pubst ok">Publié ${s.manual?'(à la main) ':''}le ${fmtDate(s.at)}${s.url?` · <a href="${esc(s.url)}" target="_blank" rel="noopener">voir le post</a>`:''}</div>`;
   if(s.error)return `<div class="pubst err">Échec : ${esc(s.error)} <button class="btn sm" data-a="pubretry" data-k="${k}">Réessayer</button><button class="btn sm ghost" data-a="pubmanual" data-k="${k}">Marquer publié</button></div>`;
-  if(s.stage)return `<div class="pubst wait">Envoi en cours (Instagram prépare le média)…</div>`;
+  if(s.stage)return `<div class="pubst wait">${s.stage==='postfast'?'Envoyé à PostFast, publication en cours…':'Envoi en cours (Instagram prépare le média)…'}</div>`;
   if(auto&&!conn)return `<div class="pubst err">${NET[k].name} n’est pas connecté : voir « Réseaux connectés » dans l’onglet Tout. <button class="btn sm ghost" data-a="pubmanual" data-k="${k}">Marquer publié</button></div>`;
-  if(auto)return `<div class="pubst wait">${p.status==='programme'?`Publication automatique le ${fmtDay(p.date)} à ${esc(p.time||'00:00')}`:'Partira tout seul une fois le post programmé'}</div>`;
+  if(auto)return `<div class="pubst wait">${k==='tt'&&sendMode(p,k)==='brouillon'?'Brouillon TikTok envoyé':'Publication automatique'} ${p.status==='programme'?`le ${fmtDay(p.date)} à ${esc(p.time||'00:00')}`:'une fois le post programmé'}</div>`;
   return `<div class="pubst">À publier à la main${k==='tt'&&p.send?.tt==='brouillon'?' (brouillon TikTok)':''}. <button class="btn sm" data-a="pubmanual" data-k="${k}">Marquer publié</button></div>`;
 }
 function visualsSection(p){
@@ -656,6 +672,11 @@ async function renderAll(d){
   }
   return out;
 }
+async function saveBoard(id){
+  const b=(S.pinBoards||[]).find(x=>x.id===id)||{id,name:id};
+  await guard(async()=>{ok(await T('settings').upsert({key:'pinterest_board',value:b,updated_at:nowIso()},{onConflict:'key'}));await loadTable('settings');toast('Tableau Pinterest : '+b.name)});
+}
+document.addEventListener('change',e=>{if(e.target.id==='pin-board'&&e.target.value)saveBoard(e.target.value)});
 async function setPublished(k,val){
   const p=S.posts.find(x=>x.id===draft?.id);if(!p)return;
   await guard(async()=>{
@@ -705,6 +726,9 @@ document.addEventListener('click',async e=>{
   else if(a==='program'){const s=document.getElementById('e-status');if(s)s.value='programme';savePost()}
   else if(a==='pubretry')setPublished(b.dataset.k,null);
   else if(a==='pubmanual')setPublished(b.dataset.k,{done:true,manual:true,at:nowIso()});
+  else if(a==='pfsync'){b.disabled=true;b.textContent='Actualisation…';try{const r=await sb.functions.invoke('hub-postfast',{body:{action:'sync'}});if(r.error){let msg=r.error.message;try{msg=(await r.error.context.json()).error||msg}catch(_){}toast(msg);return}
+    S.pinBoards=r.data.boards||[];await loadTable('connections');const n=Object.keys(r.data.accounts||{}).length;toast(`${n} compte${n>1?'s':''} trouvé${n>1?'s':''} dans PostFast`);
+    if(S.pinBoards.length&&!setting('pinterest_board'))await saveBoard(S.pinBoards[0].id);}finally{b.disabled=false;b.textContent='Actualiser depuis PostFast'}}
   else if(a==='disconnect')guard(async()=>{const r=await sb.functions.invoke('hub-connect',{body:{net:b.dataset.k,action:'disconnect'}});if(r.error)throw r.error;await loadTable('connections');toast(NET[b.dataset.k].name+' déconnecté')});
   else if(a==='install'&&installEvt){installEvt.prompt();installEvt=null;renderTabs()}
   else if(a==='forgot'){const em=$('#lg-email')?.value.trim();if(!em){toast('Saisissez votre e-mail');return}const r=await sb.auth.resetPasswordForEmail(em,{redirectTo:location.origin+location.pathname});toast(r.error?'Envoi impossible, réessayez plus tard':'E-mail envoyé : suivez le lien pour choisir un nouveau mot de passe')}
@@ -754,7 +778,7 @@ async function doLogin(mode){
 }
 
 /* ---------- data ---------- */
-const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net']};
+const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net'],settings:['settings','key']};
 async function loadTable(n){
   const r=await T(TABLES[n][0]).select('*').order(TABLES[n][1]);if(r.error)throw r.error;
   if(n==='kpis'){const o={};r.data.forEach(x=>{(o[x.week]=o[x.week]||{week:x.week})[x.net]={abonnes:x.abonnes,vues:x.vues,interactions:x.interactions,messages:x.messages}});S.kpis=o}
@@ -772,6 +796,7 @@ async function start(){
   if(m.error){S.status='offline';render(true);return}
   if(!m.data){S.status='denied';render(true);return}
   try{await Promise.all(Object.keys(TABLES).map(loadTable));S.status='ready'}catch(e){console.warn(e);S.status='offline'}
+  sb.functions.invoke('hub-postfast',{body:{action:'status'}}).then(r=>{S.pfKey=!!r.data?.key;render()}).catch(()=>{});
   render(true);
   if(!channel){channel=sb.channel('hub-select');Object.keys(TABLES).forEach(n=>channel.on('postgres_changes',{event:'*',schema:'public',table:'hub_'+TABLES[n][0]},()=>loadTable(n).catch(()=>{})));channel.subscribe()}
 }
