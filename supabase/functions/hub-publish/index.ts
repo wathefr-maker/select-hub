@@ -5,6 +5,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { FB, get, IG, igWaitFinished, MetaError, post } from "../_shared/meta.ts";
 import * as PFX from "../_shared/postfast.ts";
+import * as IGM from "../_shared/igmusic.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const admin = createClient(SB_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -114,7 +115,11 @@ async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any)
   const draft = net === "tt" && (p.send?.tt || "brouillon") === "brouillon";
   if (net === "ig") controls.instagramPublishType = oneVideo ? "REEL" : "TIMELINE";
   if (net === "fb") controls.facebookContentType = oneVideo ? "REEL" : "POST";
-  if (net === "tt") { controls.tiktokIsDraft = draft; const title = caption.split("\n")[0].slice(0, 90); if (title) controls.tiktokTitle = title; }
+  if (net === "tt") {
+    controls.tiktokIsDraft = draft;
+    const title = caption.split("\n")[0].slice(0, 90); if (title) controls.tiktokTitle = title;
+    if (!draft && p.music?.tt?.id) controls.tiktokMusicSoundId = String(p.music.tt.id);
+  }
   let content = caption;
   if (net === "pin") {
     const board = p.pin_board?.id || settings?.pinterest_board?.id;
@@ -130,6 +135,27 @@ async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any)
   const id = (r?.postIds || [])[0];
   if (!id) throw new PFX.PfError("PostFast n'a pas confirmé la création du post.");
   return { stage: "postfast", pf_id: id, draft, at: new Date().toISOString() };
+}
+
+/* ---------------- Instagram avec musique (API Audio, Facebook Login) ---------------- */
+async function igMusicStep(p: any, state: Pub, toks: any): Promise<Pub> {
+  const t = IGM.pickToken(toks), uid = toks.igm?.account_id || toks.igm_page?.account_id;
+  if (!t || !uid) throw new IGM.IgmError("La musique Instagram n'est plus connectée : reconnectez-la dans « Réseaux connectés ».");
+  if (state.stage === "music") {
+    if (!(await IGM.waitFinished(state.container, t, 20000))) return state;
+    const pub = await IGM.fpost(`/${uid}/media_publish`, { creation_id: state.container, access_token: t });
+    const info = await IGM.fget(`/${pub.id}`, { fields: "permalink", access_token: t }).catch(() => ({}));
+    return { done: true, via: "meta-music", id: pub.id, url: info.permalink || null, at: new Date().toISOString() };
+  }
+  const media = mediaFor(p, "ig");
+  if (media.length !== 1 || !media[0].video) throw new IGM.IgmError("La musique Instagram ne s'ajoute qu'à un Reel : une seule vidéo (ou le diaporama préparé par le hub).");
+  const m = p.music.ig;
+  const c = await IGM.fpost(`/${uid}/media`, {
+    media_type: "REELS", video_url: media[0].url, caption: p.captions?.ig || "", share_to_feed: "true",
+    audio_configuration: JSON.stringify({ audio_id: String(m.id), audio_volume: 100, video_volume: IGM.VIDEO_VOL[m.video || "couper"] ?? 1 }),
+    access_token: t,
+  });
+  return igMusicStep(p, { stage: "music", container: c.id, at: new Date().toISOString() }, toks);
 }
 
 /* ---------------- Jeton Instagram ---------------- */
@@ -165,11 +191,12 @@ async function run() {
       if (mode === "manuel" || (!PF_ON && mode !== "direct")) continue;
       const st = published[net] || {};
       if (st.done || (st.error && (st.attempts || 0) >= MAX_ATTEMPTS)) continue;
-      const ready = PF_ON ? conns[net] : toks[net];
-      if (!ready) { published[net] = { ...st, error: PF_ON ? "Compte absent de PostFast : connectez-le dans PostFast puis cliquez sur Actualiser." : "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
+      const ready = net === "ig" && p.music?.ig?.id ? (toks.igm || toks.igm_page) : PF_ON ? conns[net] : toks[net];
+      if (!ready) { published[net] = { ...st, error: net === "ig" && p.music?.ig?.id ? "La musique Instagram n'est pas connectée : connectez-la dans « Réseaux connectés », ou retirez la musique." : PF_ON ? "Compte absent de PostFast : connectez-le dans PostFast puis cliquez sur Actualiser." : "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
       try {
         const base = st.error ? {} : st;
-        const next = PF_ON ? await pfStep(p, net, base, conns[net], settings) : net === "ig" ? await igStep(p, base, toks.ig) : await fbStep(p, toks.fb);
+        const music = net === "ig" && p.music?.ig?.id && (toks.igm || toks.igm_page);
+        const next = music ? await igMusicStep(p, base, toks) : PF_ON ? await pfStep(p, net, base, conns[net], settings) : net === "ig" ? await igStep(p, base, toks.ig) : await fbStep(p, toks.fb);
         published[net] = next; changed = true;
         report.push({ post: p.id, net, result: next.done ? "publié" : next.stage });
       } catch (e) {
@@ -179,7 +206,8 @@ async function run() {
       }
     }
     if (!changed) continue;
-    const allDone = (p.networks || []).every((n: string) => published[n]?.done);
+    // Un brouillon TikTok n'est pas une publication : le post reste « Programmé » jusqu'au clic sur « C'est publié ».
+    const allDone = (p.networks || []).every((n: string) => published[n]?.done && !published[n]?.draft);
     await admin.from("hub_posts").update({ published, ...(allDone ? { status: "publie" } : {}), updated_at: new Date().toISOString() }).eq("id", p.id);
   }
   await admin.from("hub_connections").update({ last_run_at: new Date().toISOString() }).in("net", PF_ON ? Object.keys(conns) : Object.keys(toks));
