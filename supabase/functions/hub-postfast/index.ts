@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
       if (r.error) throw r.error;
     }
     let pinBoards: { id: string; name: string }[] = [];
-    if (byNet.pin) pinBoards = await PFX.boards(String(pick(byNet.pin).id));
+    if (byNet.pin) {
+      pinBoards = await PFX.boards(String(pick(byNet.pin).id));
+      await admin.from("hub_settings").upsert({ key: "pinterest_boards", value: { list: pinBoards }, updated_at: now });
+    }
     return json({ accounts: found, boards: pinBoards, total: accs.length });
   } catch (e) {
     return json({ error: (e as Error).message }, 400);

@@ -117,7 +117,7 @@ async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any)
   if (net === "tt") { controls.tiktokIsDraft = draft; const title = caption.split("\n")[0].slice(0, 90); if (title) controls.tiktokTitle = title; }
   let content = caption;
   if (net === "pin") {
-    const board = settings?.pinterest_board?.id;
+    const board = p.pin_board?.id || settings?.pinterest_board?.id;
     if (!board) throw new PFX.PfError("Choisissez un tableau Pinterest dans « Réseaux connectés ».");
     controls.pinterestBoardId = board;
     const link = (caption.match(/https?:\/\/\S+/) || [])[0];

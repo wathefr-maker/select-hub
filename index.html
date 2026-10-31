@@ -367,6 +367,7 @@ const AUTO=['ig','fb'];
 const sendMode=(p,k)=>p.send?.[k]||(k==='tt'?'brouillon':'direct');
 const isAuto=(p,k)=>S.pfKey?sendMode(p,k)!=='manuel':AUTO.includes(k)&&sendMode(p,k)==='direct';
 const setting=k=>(S.settings.find(x=>x.key===k)||{}).value;
+const pinBoards=()=>{const l=S.pinBoards||setting('pinterest_boards')?.list||[];const d=setting('pinterest_board');return l.length?l:(d?[d]:[])};
 const ago=iso=>{if(!iso)return 'jamais';const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?'à l’instant':m<60?`il y a ${m} min`:m<1440?`il y a ${Math.round(m/60)} h`:`il y a ${Math.round(m/1440)} j`};
 const fmtDate=iso=>iso?new Date(iso).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
 function pubTags(p){return (p.networks||[]).map(k=>{const s=p.published?.[k];if(!s)return '';if(s.error)return `<span class="tag" style="color:var(--pin)">${esc(NET[k].name)} : échec</span>`;if(s.done&&p.status!=='publie')return `<span class="tag" style="color:var(--s-valide)">${esc(NET[k].name)} : publié</span>`;return ''}).join('')}
@@ -467,7 +468,7 @@ function connCard(){
 function pfCard(){
   const last=S.connections.map(c=>c.last_run_at).filter(Boolean).sort().pop();
   const board=setting('pinterest_board');
-  const boards=S.pinBoards||(board?[board]:[]);
+  const boards=pinBoards();
   const row=k=>{const c=S.connections.find(x=>x.net===k&&x.via==='postfast'),n=NET[k];
     const st=c?`<span class="st ${c.last_error?'err':'ok'}">${c.last_error?esc(c.last_error):'Connecté : '+esc(c.account_name||'')}</span>`:'<span class="st err">Pas encore trouvé dans PostFast</span>';
     const pin=k==='pin'&&c?`<label class="f">Tableau Pinterest pour les épingles<select id="pin-board" data-a-change="pinboard">${boards.length?'':'<option value="">Cliquez sur Actualiser pour charger vos tableaux</option>'}${boards.map(b=>`<option value="${esc(b.id)}" ${board?.id===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select></label>`:'';
@@ -508,7 +509,7 @@ function viewNet(k){
 function boardCard(k){
   const ps=sortPosts(postsFor(k));
   return `<section class="card"><div class="sechead"><h2>Posts</h2><small>${ps.length} au total · glissez horizontalement sur téléphone</small></div><div class="board">${ST.map(([s,l])=>{const c=ps.filter(p=>p.status===s);
-    return `<div class="col"><header>${pill(s)}<span class="count hint">${c.length}</span></header>${c.map(p=>`<button class="pcard" data-a="open" data-id="${p.id}"><span class="t">${esc(p.title||'Sans titre')}</span><span class="m">${dots(p.networks)}<span>${fmtDay(p.date)}${p.time?' · '+esc(p.time):''}</span>${p.format?`<span class="tag">${esc(p.format)}</span>`:''}${['a_valider','valide'].includes(s)?`<span>${nval(p)}/${need(p)} ✓</span>`:''}${p.visuals?.length?`<span>${p.visuals.length} visuel${p.visuals.length>1?'s':''}</span>`:''}${sendTags(p)}${pubTags(p)}</span></button>`).join('')}</div>`}).join('')}</div></section>`;
+    return `<div class="col"><header>${pill(s)}<span class="count hint">${c.length}</span></header>${c.map(p=>`<button class="pcard" data-a="open" data-id="${p.id}"><span class="t">${esc(p.title||'Sans titre')}</span><span class="m">${dots(p.networks)}<span>${fmtDay(p.date)}${p.time?' · '+esc(p.time):''}</span>${p.format?`<span class="tag">${esc(p.format)}</span>`:''}${['a_valider','valide'].includes(s)?`<span>${nval(p)}/${need(p)} ✓</span>`:''}${p.visuals?.length?`<span>${p.visuals.length} visuel${p.visuals.length>1?'s':''}</span>`:''}${sendTags(p)}${pubTags(p)}${p.pin_board&&(p.networks||[]).includes('pin')?`<span class="tag">Tableau : ${esc(p.pin_board.name)}</span>`:''}</span></button>`).join('')}</div>`}).join('')}</div></section>`;
 }
 function pinNote(){return `<section class="card"><div class="sechead"><h2>Messages</h2></div><p class="empty">Pinterest n’a quasiment pas de messagerie. Le travail se fait sur les épingles et les tableaux : un bon titre, une bonne description et un lien vers la fiche produit.</p></section>`}
 function msgCard(k){
@@ -551,6 +552,7 @@ function readEditor(){if(!draft)return;const v=id=>document.getElementById(id);
   draft.title=v('e-title').value.trim();draft.format=v('e-format').value;draft.date=v('e-date').value;draft.time=v('e-time').value;draft.status=v('e-status').value;draft.simple=v('e-simple').checked;draft.notes=v('e-notes').value;
   draft.networks=NETS.map(n=>n.k).filter(k=>v('e-net-'+k).checked);
   NETS.forEach(n=>{const s=v('e-send-'+n.k);if(s)draft.send[n.k]=s.value});
+  const pb=v('e-pinboard');if(pb){const b=pinBoards().find(x=>x.id===pb.value);draft.pin_board=b?{id:b.id,name:b.name}:null}
   draft.captions=draft.captions||{};NETS.forEach(n=>{const t=v('e-cap-'+n.k);if(t)draft.captions[n.k]=t.value});
   draft.stats=draft.stats||{};draft.networks.forEach(k=>{STATF.forEach(([f])=>{const i=v(`e-st-${k}-${f}`);if(i){draft.stats[k]=draft.stats[k]||{};draft.stats[k][f]=i.value===''?null:Number(i.value)}})});
 }
@@ -567,7 +569,7 @@ function renderEditor(){
     <label class="check" style="justify-self:start"><input type="checkbox" id="e-simple" data-rerender ${p.simple?'checked':''}>Post simple : une seule validation suffit</label></section>
    ${p.id&&['a_valider','valide','programme','publie'].includes(p.status)?`<div class="valbox ${n>=nd?'ok':''}"><div><b class="count">${n}/${nd}</b> validation${nd>1?'s':''} <div class="who-list">${Object.keys(vals).map(u=>`<span class="tag" data-uid="${esc(u)}">…</span>`).join('')||'<span class="hint">Personne pour l’instant</span>'}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${['a_valider','valide'].includes(p.status)?`<button class="btn ${mine||n>=nd?'':'primary'}" data-a="validate" data-id="${p.id}">${mine?'Retirer ma validation':'Je valide'}</button>`:''}${p.status==='valide'&&n>=nd?`<button class="btn primary" data-a="program">Programmer la publication</button>`:''}</div></div>`:''}
    ${visualsSection(p)}
-   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">${S.pfKey?'Une fois le post <b>Programmé</b>, chaque réseau part tout seul à l’heure prévue, selon le choix d’envoi. TikTok en brouillon arrive dans l’appli TikTok pour la finition. « Je publie à la main » ne part pas : cliquez ensuite sur « Marquer publié ».':'Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».'}</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r"><select id="e-send-${k}" aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header><textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
+   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">${S.pfKey?'Une fois le post <b>Programmé</b>, chaque réseau part tout seul à l’heure prévue, selon le choix d’envoi. TikTok en brouillon arrive dans l’appli TikTok pour la finition. « Je publie à la main » ne part pas : cliquez ensuite sur « Marquer publié ».':'Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».'}</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r"><select id="e-send-${k}" aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header>${k==='pin'&&S.pfKey?pinBoardField(p):''}<textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
    <section><label class="f">Brief / fiche de tournage<textarea id="e-notes" placeholder="Quoi filmer, quels plans, combien de secondes, quelle paire…" style="min-height:120px">${esc(p.notes)}</textarea></label></section>
    ${p.status==='publie'&&p.networks.length?`<section><h2>Statistiques du post</h2><div class="statgrid"><div class="r hint"><span></span>${STATF.map(([,l])=>`<span>${l}</span>`).join('')}</div>${p.networks.map(k=>`<div class="r"><b><i class="dot ${k}"></i>${NET[k].name}</b>${STATF.map(([f,l])=>`<input type="number" min="0" id="e-st-${k}-${f}" aria-label="${l} ${NET[k].name}" value="${p.stats?.[k]?.[f]??''}">`).join('')}</div>`).join('')}</div></section>`:''}
    <div class="footbar">${p.id?`<button class="btn danger" data-a="delpost">${confirmDel?'Confirmer la suppression':'Supprimer'}</button>`:'<span></span>'}<div style="display:flex;gap:8px"><button class="btn" data-a="close">Annuler</button><button class="btn primary" data-a="save">Enregistrer</button></div></div></div>`;
@@ -578,6 +580,10 @@ $('#overlay').addEventListener('input',e=>{const k=e.target.dataset.count;if(k){
 $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeEditor()});
 addEventListener('keydown',e=>{if(e.key==='Escape'&&draft)closeEditor()});
 
+function pinBoardField(p){
+  const def=setting('pinterest_board'),cur=p.pin_board?.id||'';
+  return `<label class="f" style="font-weight:500">Tableau Pinterest<select id="e-pinboard"><option value="">Tableau par défaut${def?' ('+esc(def.name)+')':''}</option>${pinBoards().map(b=>`<option value="${esc(b.id)}" ${cur===b.id?'selected':''}>${esc(b.name)}</option>`).join('')}</select></label>`;
+}
 function pubState(p,k){
   if(!p.id||!['valide','programme','publie'].includes(p.status))return '';
   const s=p.published?.[k]||{},auto=isAuto(p,k),conn=S.connections.find(c=>c.net===k);
@@ -650,7 +656,7 @@ async function savePost(){
     if(!d.id)d.id=crypto.randomUUID();
     let rendered=(live&&live.rendered)||{};
     if(d.status==='programme'&&d.visuals?.length){toast('Préparation des images pour chaque réseau…');rendered=await renderAll(d)}
-    const data={title:d.title,networks:d.networks,format:d.format,date:d.date||null,time:d.time||'',status:d.status,simple:!!d.simple,captions:d.captions||{},notes:d.notes||'',validations:(live||d).validations||{},stats:d.stats||{},send:d.send||{},fit:d.fit||{},visuals:d.visuals||[],rendered,updated_at:nowIso()};
+    const data={title:d.title,networks:d.networks,format:d.format,date:d.date||null,time:d.time||'',status:d.status,simple:!!d.simple,captions:d.captions||{},notes:d.notes||'',validations:(live||d).validations||{},stats:d.stats||{},send:d.send||{},fit:d.fit||{},visuals:d.visuals||[],rendered,pin_board:d.pin_board||null,updated_at:nowIso()};
     if(data.status==='a_valider'&&Object.keys(data.validations).length>=(data.simple?1:2))data.status='valide';
     if(live)ok(await T('posts').update(data).eq('id',d.id));else{data.id=d.id;data.created_by=me.id;ok(await T('posts').insert(data))}
     if(d.fromIdea)await T('ideas').delete().eq('id',d.fromIdea);
