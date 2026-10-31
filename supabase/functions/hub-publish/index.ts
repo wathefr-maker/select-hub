@@ -34,6 +34,17 @@ function mediaFor(p: any, net: string): Media[] {
   return paths.map((path) => ({ url: publicUrl(path), video: isVideo(path) }));
 }
 
+/** Format choisi pour un réseau dans le hub (post, reel, story ; TikTok : photos ou vidéo). */
+function fmtOf(p: any, net: string): string {
+  const f = p.formats?.[net];
+  if (f) return f;
+  const vid = (p.visuals || []).some((v: any) => isVideo(v.path || ""));
+  if (net === "tt") return vid ? "video" : "photos";
+  if (net === "pin") return "pin";
+  if (p.format === "Story") return "story";
+  return vid && (p.visuals || []).length === 1 ? "reel" : "post";
+}
+
 /* ---------------- Instagram ---------------- */
 async function igStep(p: any, state: Pub, tok: any): Promise<Pub> {
   const t = tok.access_token, uid = tok.account_id, caption = p.captions?.ig || "";
@@ -96,25 +107,32 @@ async function fbStep(p: any, tok: any): Promise<Pub> {
 /* ---------------- PostFast ---------------- */
 async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any): Promise<Pub> {
   if (state.stage === "postfast") {
-    const s = await PFX.postState(state.pf_id, conn.account_id);
-    if (s.state === "done") return { done: true, via: "postfast", pf_id: state.pf_id, url: s.url || null, draft: state.draft || false, at: new Date().toISOString() };
-    if (s.state === "error") throw new PFX.PfError(s.error || "Échec côté PostFast.");
-    return state;
+    const ids: string[] = state.pf_ids || [state.pf_id];
+    let url: string | null = null;
+    for (const id of ids) {
+      const s = await PFX.postState(id, conn.account_id);
+      if (s.state === "error") throw new PFX.PfError(s.error || "Échec côté PostFast.");
+      if (s.state !== "done") return state;
+      url = url || s.url || null;
+    }
+    return { done: true, via: "postfast", pf_id: ids[0], pf_ids: ids, url, draft: state.draft || false, at: new Date().toISOString() };
   }
   const media = mediaFor(p, net);
   if ((net === "ig" || net === "tt" || net === "pin") && !media.length) throw new PFX.PfError(`${net === "ig" ? "Instagram" : net === "tt" ? "TikTok" : "Pinterest"} demande au moins une photo ou une vidéo.`);
+  const oneVideo = media.length === 1 && media[0].video;
+  const fmt = fmtOf(p, net);
+  if ((fmt === "reel" || (net === "tt" && fmt === "video")) && !oneVideo) throw new PFX.PfError("Ce format demande une seule vidéo : reprogrammez le post pour que le hub prépare le diaporama vidéo.");
   const items = [];
   for (let i = 0; i < media.length; i++) {
     const path = decodeURIComponent(media[i].url.split(`/${BUCKET}/`)[1] || "");
     const up = await PFX.upload(media[i].url, path);
     items.push({ key: up.key, type: up.type, sortOrder: i });
   }
-  const oneVideo = media.length === 1 && media[0].video;
   const caption = p.captions?.[net] || "";
   const controls: Record<string, unknown> = {};
   const draft = net === "tt" && (p.send?.tt || "brouillon") === "brouillon";
-  if (net === "ig") controls.instagramPublishType = oneVideo ? "REEL" : "TIMELINE";
-  if (net === "fb") controls.facebookContentType = oneVideo ? "REEL" : "POST";
+  if (net === "ig") controls.instagramPublishType = fmt === "story" ? "STORY" : fmt === "reel" ? "REEL" : "TIMELINE";
+  if (net === "fb") controls.facebookContentType = fmt === "story" ? "STORY" : fmt === "reel" ? "REEL" : "POST";
   if (net === "tt") {
     controls.tiktokIsDraft = draft;
     const title = caption.split("\n")[0].slice(0, 90); if (title) controls.tiktokTitle = title;
@@ -128,13 +146,16 @@ async function pfStep(p: any, net: string, state: Pub, conn: any, settings: any)
     const link = (caption.match(/https?:\/\/\S+/) || [])[0];
     if (link) { controls.pinterestLink = link; content = caption.replace(link, "").trim(); }
   }
+  const when = new Date(Date.now() + 120000).toISOString();
+  // Une story = un seul média : plusieurs photos deviennent plusieurs stories à la suite.
+  const groups = fmt === "story" ? items.map((it, i) => [{ ...it, sortOrder: 0 }]).slice(0, 10) : [items];
   const r = await PFX.pf("POST", "/social-posts", {
-    posts: [{ content, socialMediaId: conn.account_id, scheduledAt: new Date(Date.now() + 120000).toISOString(), mediaItems: items }],
+    posts: groups.map((g, i) => ({ content, socialMediaId: conn.account_id, scheduledAt: new Date(Date.parse(when) + i * 60000).toISOString(), mediaItems: g })),
     controls,
   });
-  const id = (r?.postIds || [])[0];
-  if (!id) throw new PFX.PfError("PostFast n'a pas confirmé la création du post.");
-  return { stage: "postfast", pf_id: id, draft, at: new Date().toISOString() };
+  const ids: string[] = r?.postIds || [];
+  if (!ids.length) throw new PFX.PfError("PostFast n'a pas confirmé la création du post.");
+  return { stage: "postfast", pf_id: ids[0], pf_ids: ids, draft, at: new Date().toISOString() };
 }
 
 /* ---------------- Instagram avec musique (API Audio, Facebook Login) ---------------- */
@@ -191,11 +212,11 @@ async function run() {
       if (mode === "manuel" || (!PF_ON && mode !== "direct")) continue;
       const st = published[net] || {};
       if (st.done || (st.error && (st.attempts || 0) >= MAX_ATTEMPTS)) continue;
-      const ready = net === "ig" && p.music?.ig?.id ? (toks.igm || toks.igm_page) : PF_ON ? conns[net] : toks[net];
-      if (!ready) { published[net] = { ...st, error: net === "ig" && p.music?.ig?.id ? "La musique Instagram n'est pas connectée : connectez-la dans « Réseaux connectés », ou retirez la musique." : PF_ON ? "Compte absent de PostFast : connectez-le dans PostFast puis cliquez sur Actualiser." : "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
+      const ready = net === "ig" && p.music?.ig?.id && fmtOf(p, "ig") === "reel" ? (toks.igm || toks.igm_page) : PF_ON ? conns[net] : toks[net];
+      if (!ready) { published[net] = { ...st, error: net === "ig" && p.music?.ig?.id && fmtOf(p, "ig") === "reel" ? "La musique Instagram n'est pas connectée : connectez-la dans « Réseaux connectés », ou retirez la musique." : PF_ON ? "Compte absent de PostFast : connectez-le dans PostFast puis cliquez sur Actualiser." : "Réseau non connecté dans le hub.", attempts: MAX_ATTEMPTS, at: new Date().toISOString() }; changed = true; continue; }
       try {
         const base = st.error ? {} : st;
-        const music = net === "ig" && p.music?.ig?.id && (toks.igm || toks.igm_page);
+        const music = net === "ig" && p.music?.ig?.id && fmtOf(p, "ig") === "reel" && (toks.igm || toks.igm_page);
         const next = music ? await igMusicStep(p, base, toks) : PF_ON ? await pfStep(p, net, base, conns[net], settings) : net === "ig" ? await igStep(p, base, toks.ig) : await fbStep(p, toks.fb);
         published[net] = next; changed = true;
         report.push({ post: p.id, net, result: next.done ? "publié" : next.stage });

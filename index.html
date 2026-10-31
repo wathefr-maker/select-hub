@@ -333,6 +333,8 @@ const SIZES={ig:[1080,1350],fb:[1080,1350],tt:[1080,1920],pin:[1000,1500]};
 const MANUEL=['manuel','Je publie à la main'];
 const SEND={ig:[['direct','Publier directement'],MANUEL],fb:[['direct','Publier directement'],MANUEL],tt:[['brouillon','Brouillon dans l’appli TikTok'],['direct','Publier directement'],MANUEL],pin:[['direct','Publier directement'],MANUEL]};
 const SENDDEF={ig:'direct',fb:'direct',tt:'brouillon',pin:'direct'};
+const FMTS={ig:[['post','Post / carrousel'],['reel','Reel'],['story','Story']],fb:[['post','Post / carrousel'],['reel','Reel'],['story','Story']],tt:[['photos','Photos (carrousel)'],['video','Vidéo']]};
+const FMTL={post:'Post',reel:'Reel',story:'Story',photos:'Photos',video:'Vidéo',pin:'Épingle'};
 const SENDSHORT={brouillon:'brouillon',manuel:'à la main'};
 const STATF=[['vues','Vues'],['likes','J’aime'],['comm','Comm.'],['partages','Partages'],['enreg','Enreg.']];
 const REPERES={
@@ -580,6 +582,7 @@ function readEditor(){if(!draft)return;const v=id=>document.getElementById(id);
   draft.title=v('e-title').value.trim();draft.format=v('e-format').value;draft.date=v('e-date').value;draft.time=v('e-time').value;draft.status=v('e-status').value;draft.simple=v('e-simple').checked;draft.notes=v('e-notes').value;
   draft.networks=NETS.map(n=>n.k).filter(k=>v('e-net-'+k).checked);
   NETS.forEach(n=>{const s=v('e-send-'+n.k);if(s)draft.send[n.k]=s.value});
+  NETS.forEach(n=>{const f=v('e-fmt-'+n.k);if(f){draft.formats=draft.formats||{};draft.formats[n.k]=f.value}});
   const mv=v('e-igvid');if(mv&&draft.music?.ig)draft.music.ig.video=mv.value;
   const pb=v('e-pinboard');if(pb){const b=pinBoards().find(x=>x.id===pb.value);draft.pin_board=b?{id:b.id,name:b.name}:null}
   draft.captions=draft.captions||{};NETS.forEach(n=>{const t=v('e-cap-'+n.k);if(t)draft.captions[n.k]=t.value});
@@ -598,7 +601,7 @@ function renderEditor(){
     <label class="check" style="justify-self:start"><input type="checkbox" id="e-simple" data-rerender ${p.simple?'checked':''}>Post simple : une seule validation suffit</label></section>
    ${p.id&&['a_valider','valide','programme','publie'].includes(p.status)?`<div class="valbox ${n>=nd?'ok':''}"><div><b class="count">${n}/${nd}</b> validation${nd>1?'s':''} <div class="who-list">${Object.keys(vals).map(u=>`<span class="tag" data-uid="${esc(u)}">…</span>`).join('')||'<span class="hint">Personne pour l’instant</span>'}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap">${['a_valider','valide'].includes(p.status)?`<button class="btn ${mine||n>=nd?'':'primary'}" data-a="validate" data-id="${p.id}">${mine?'Retirer ma validation':'Je valide'}</button>`:''}${p.status==='valide'&&n>=nd?`<button class="btn primary" data-a="program">Programmer la publication</button>`:''}</div></div>`:''}
    ${visualsSection(p)}
-   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">${S.pfKey?'Une fois le post <b>Programmé</b>, chaque réseau part tout seul à l’heure prévue, selon le choix d’envoi. TikTok en brouillon arrive dans l’appli TikTok pour la finition. « Je publie à la main » ne part pas : cliquez ensuite sur « Marquer publié ».':'Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».'}</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r"><select id="e-send-${k}" aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header>${k==='pin'&&S.pfKey?pinBoardField(p):''}${(k==='tt'||k==='ig')&&S.pfKey?musicField(p,k):''}<textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
+   <section><h2>Textes et envoi par réseau</h2><p class="hint" style="margin:0">${S.pfKey?'Une fois le post <b>Programmé</b>, chaque réseau part tout seul à l’heure prévue, selon le choix d’envoi. TikTok en brouillon arrive dans l’appli TikTok pour la finition. « Je publie à la main » ne part pas : cliquez ensuite sur « Marquer publié ».':'Une fois le post <b>Programmé</b>, Instagram et Facebook réglés sur « Publier directement » partent tout seuls à l’heure prévue. Le reste se publie à la main : cliquez ensuite sur « Marquer publié ».'}</p>${p.networks.length?p.networks.map(k=>{const t=p.captions?.[k]||'';return `<div class="cap"><header><span><i class="dot ${k}"></i>${NET[k].name}</span><span class="r">${FMTS[k]?`<select id="e-fmt-${k}" data-rerender aria-label="Format ${NET[k].name}">${FMTS[k].map(([v,l])=>`<option value="${v}" ${fmtOf(p,k)===v?'selected':''}>${l}</option>`).join('')}</select>`:''}<select id="e-send-${k}" data-rerender aria-label="Envoi ${NET[k].name}">${SEND[k].map(([v,l])=>`<option value="${v}" ${p.send[k]===v?'selected':''}>${l}</option>`).join('')}</select><button class="btn sm" data-a="copycap" data-k="${k}">Copier</button></span></header>${k==='pin'&&S.pfKey?pinBoardField(p):''}${(k==='tt'||k==='ig')&&S.pfKey?musicField(p,k):''}<textarea id="e-cap-${k}" data-count="${k}">${esc(t)}</textarea><div class="foot"><span id="e-cnt-${k}">${capHint(k,t)}</span>${/\{\{/.test(t)?'<span style="color:var(--s-valider)">À compléter : {{…}}</span>':''}</div>${pubState(p,k)}</div>`}).join(''):'<p class="empty">Cochez au moins un réseau.</p>'}</section>
    <section><label class="f">Brief / fiche de tournage<textarea id="e-notes" placeholder="Quoi filmer, quels plans, combien de secondes, quelle paire…" style="min-height:120px">${esc(p.notes)}</textarea></label></section>
    ${p.status==='publie'&&p.networks.length?`<section><h2>Statistiques du post</h2><div class="statgrid"><div class="r hint"><span></span>${STATF.map(([,l])=>`<span>${l}</span>`).join('')}</div>${p.networks.map(k=>`<div class="r"><b><i class="dot ${k}"></i>${NET[k].name}</b>${STATF.map(([f,l])=>`<input type="number" min="0" id="e-st-${k}-${f}" aria-label="${l} ${NET[k].name}" value="${p.stats?.[k]?.[f]??''}">`).join('')}</div>`).join('')}</div></section>`:''}
    <div class="footbar">${p.id?`<button class="btn danger" data-a="delpost">${confirmDel?'Confirmer la suppression':'Supprimer'}</button>`:'<span></span>'}<div style="display:flex;gap:8px"><button class="btn" data-a="close">Annuler</button><button class="btn primary" data-a="save">Enregistrer</button></div></div></div>`;
@@ -619,6 +622,16 @@ function pinBoardField(p){
 const fmtDur=s=>s?`${Math.floor(s/60)}:${pad(s%60)}`:'';
 const igmConn=()=>S.connections.find(c=>c.net==='igm');
 const hasVideo=p=>(p.visuals||[]).some(isVid);
+/* format par réseau : choisi dans le hub, sinon déduit des visuels */
+function fmtOf(p,k){const f=p.formats?.[k];if(f)return f;const V=p.visuals||[],vid=V.some(isVid);if(k==='tt')return vid?'video':'photos';if(k==='pin')return 'pin';if(p.format==='Story')return 'story';if(p.format==='Reel')return 'reel';return vid&&V.length===1?'reel':'post'}
+const needsVideo=(p,k)=>{const f=fmtOf(p,k);return f==='reel'||(k==='tt'&&f==='video')};
+const sizeFor=(p,k)=>{const f=fmtOf(p,k);return (f==='reel'||f==='story'||k==='tt')?[1080,1920]:SIZES[k]};
+function fmtProblem(p,k){const V=p.visuals||[],f=fmtOf(p,k),nv=V.filter(isVid).length;if(!V.length)return '';
+  if(needsVideo(p,k)&&(nv>1||(nv===1&&V.length>1)))return `${FMTL[f]} : une seule vidéo, ou uniquement des photos (le hub en fera une vidéo diaporama).`;
+  if(k==='tt'&&f==='photos'&&nv)return 'Photos TikTok : retirez la vidéo, ou passez en « Vidéo ».';
+  if(f==='story'&&V.length>10)return 'Story : 10 médias maximum (une story par média).';
+  if(f==='post'&&k==='ig'&&V.length>10)return 'Carrousel Instagram : 10 médias maximum.';
+  return ''}
 const photosOnly=p=>(p.visuals||[]).length>0&&!hasVideo(p);
 function soundRow(x,k,chosen){
   return `<div class="it">${x.cover?`<img class="cv" src="${esc(x.cover)}" alt="" loading="lazy">`:'<span class="cv"></span>'}
@@ -631,9 +644,9 @@ function musicField(p,k){
   let notes='';
   if(k==='tt'&&sendMode(p,'tt')==='brouillon')notes=`<p class="note w">En brouillon, TikTok ignore le son choisi ici : ajoutez-le dans l’appli. Passez TikTok en « Publier directement » pour que ce son parte tout seul.</p>`;
   if(k==='ig'){
+    if(fmtOf(p,'ig')!=='reel')return `<div class="mus"><p class="note">🎵 La musique Instagram n’est possible qu’en <b>Reel</b> : choisissez le format Reel (vos photos deviendront une vidéo diaporama).${m?' La musique choisie sera ignorée.':''}</p></div>`;
     if(!igmConn())return `<div class="mus"><p class="note">🎵 Musique Instagram : à connecter une fois dans « Réseaux connectés » (onglet Tout).</p></div>`;
-    if(m&&photosOnly(p))notes=`<p class="note">Avec une musique, Instagram reçoit un <b>Reel diaporama</b> de vos photos (2,5 s par photo), préparé par le hub au moment de programmer.</p>`;
-    if(m&&(p.visuals||[]).filter(isVid).length>1||m&&hasVideo(p)&&(p.visuals||[]).length>1)notes=`<p class="note w">La musique Instagram demande une seule vidéo, ou uniquement des photos.</p>`;
+
   }
   const cur=m?`<div class="cur">${soundRow(m,k,true).replace('<div class="it">','').replace(/<\/div>$/,'')}
      ${k==='ig'?`<label class="f" style="font-weight:500;font-size:12px">Son de la vidéo<select id="e-igvid">${[['couper','Couper'],['faible','Faible'],['garder','Garder']].map(([v,l])=>`<option value="${v}" ${(m.video||'couper')===v?'selected':''}>${l}</option>`).join('')}</select></label>`:''}
@@ -670,9 +683,9 @@ function playPreview(btn){
 function stopPreview(){if(player){player.pause();player=null}}
 
 /* Reel diaporama : les photos deviennent une vidéo verticale (2,5 s par photo) pour porter la musique Instagram. */
-async function makeSlideshow(d){
+async function makeSlideshow(d,fit){
   const W=1080,H=1920,per=2.5,fade=.35,fps=30;
-  const imgs=[];for(const v of d.visuals){const b=await renderVis(v,'ig',d.fit?.ig||'cover',[W,H]);imgs.push(await createImageBitmap(b))}
+  const imgs=[];for(const v of d.visuals){const b=await renderVis(v,'ig',fit||'cover',[W,H]);imgs.push(await createImageBitmap(b))}
   const types=['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4'];
   const mime=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t));
   if(!mime)throw new Error('Ce navigateur ne sait pas créer de vidéo MP4 : utilisez Chrome à jour.');
@@ -708,9 +721,9 @@ function visualsSection(p){
   const media=(v,cls='',style='')=>isVid(v)?`<video class="${cls}" src="${esc(vurl(v))}#t=0.5" muted playsinline preload="metadata" style="${style}"></video>`:`<img class="${cls}" src="${esc(vurl(v))}" alt="${esc(v.name||'')}" style="${style}">`;
   const thumbs=V.map((v,i)=>`<div class="vthumb">${media(v)}<span class="ix">${i+1}</span>${isVid(v)?'<span class="vid">vidéo</span>':''}<div class="vb"><button data-a="vmove" data-i="${i}" data-d="-1" aria-label="Avancer le visuel ${i+1}">‹</button><button data-a="vdel" data-i="${i}" aria-label="Retirer le visuel ${i+1}">×</button><button data-a="vmove" data-i="${i}" data-d="1" aria-label="Reculer le visuel ${i+1}">›</button></div></div>`).join('');
   const up=sb?`<label class="upl">+ Photos ou vidéos<input type="file" id="e-files" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple></label>`:'';
-  const blocks=n?p.networks.map(k=>{const [w,h]=SIZES[k],fit=p.fit[k]||'cover';
-    const warn=k==='ig'&&n>10?'Instagram : 10 images maximum par carrousel en publication automatique.':k==='tt'&&n>35?'TikTok : 35 images maximum.':k==='pin'&&n>1?'Pinterest : chaque image deviendra une épingle séparée.':'';
-    return `<div class="fmt"><header><span><i class="dot ${k}"></i>${NET[k].name} · ${w}×${h}</span><span class="seg" role="group" aria-label="Adaptation ${NET[k].name}"><button data-a="fit" data-k="${k}" data-v="cover" aria-pressed="${fit==='cover'}">Recadrer</button><button data-a="fit" data-k="${k}" data-v="contain" aria-pressed="${fit==='contain'}">Bandes floues</button></span></header>
+  const blocks=n?p.networks.map(k=>{const [w,h]=sizeFor(p,k),fit=p.fit[k]||'cover',f=fmtOf(p,k);
+    const warn=fmtProblem(p,k)||(needsVideo(p,k)&&photosOnly(p)?`${FMTL[f]} : vos photos deviendront une vidéo diaporama (2,5 s par photo).`:f==='story'&&n>1?`Story : ${n} stories à la suite, une par média.`:k==='tt'&&n>35?'TikTok : 35 images maximum.':k==='pin'&&n>5?'Pinterest : 5 images maximum par épingle carrousel.':'');
+    return `<div class="fmt"><header><span><i class="dot ${k}"></i>${NET[k].name} · ${FMTL[f]||''} · ${w}×${h}</span><span class="seg" role="group" aria-label="Adaptation ${NET[k].name}"><button data-a="fit" data-k="${k}" data-v="cover" aria-pressed="${fit==='cover'}">Recadrer</button><button data-a="fit" data-k="${k}" data-v="contain" aria-pressed="${fit==='contain'}">Bandes floues</button></span></header>
     <div class="prev">${V.map(v=>`<div class="pv" style="aspect-ratio:${w}/${h}">${isVid(v)?media(v,'fg','object-fit:contain'):(fit==='contain'?`<img class="bg" src="${esc(vurl(v))}" alt="">`:'')+media(v,'fg','object-fit:'+fit)}</div>`).join('')}</div>
     ${warn?`<span class="warn">${warn}</span>`:''}<div><button class="btn sm" data-a="dlvis" data-k="${k}">Télécharger ${n>1?'les '+n+' visuels':'le visuel'} au format ${NET[k].name}</button></div></div>`}).join(''):'';
   return `<section><div class="sechead" style="margin:0"><h2>Visuels</h2><small>${n} média${n>1?'s':''}${n?' · l’ordre = l’ordre du carrousel':''}</small></div>
@@ -732,7 +745,7 @@ async function downloadVis(k,btn){
   const label=btn.textContent;btn.disabled=true;btn.textContent='Préparation…';
   try{
     const base=`select-${slug(draft.title)}-${NET[k].slug}`;let file,data;
-    const one=async v=>isVid(v)?await (await fetch(vurl(v))).blob():await renderVis(v,k,fit);
+    const one=async v=>isVid(v)?await (await fetch(vurl(v))).blob():await renderVis(v,k,fit,sizeFor(draft,k));
     if(V.length===1){data=await one(V[0]);file=base+(isVid(V[0])?'.'+V[0].path.split('.').pop():'.jpg')}
     else{const z=new JSZip();for(let i=0;i<V.length;i++)z.file(`${pad(i+1)}.${isVid(V[i])?V[i].path.split('.').pop():'jpg'}`,await one(V[i]));data=await z.generateAsync({type:'blob'});file=base+'.zip'}
     const a=document.createElement('a');a.href=URL.createObjectURL(data);a.download=file;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast('Visuels téléchargés');
@@ -760,11 +773,12 @@ async function savePost(){
     if(d.status==='programme'){
       if(Object.keys((live||d).validations||{}).length<(d.simple?1:2)){toast('Faites d’abord valider le post avant de le programmer');return}
       if(!d.date){toast('Choisissez une date de publication');return}
+      const bad=d.networks.map(k=>fmtProblem(d,k)).find(Boolean);if(bad){toast(bad);return}
     }
     if(!d.id)d.id=crypto.randomUUID();
     let rendered=(live&&live.rendered)||{};
     if(d.status==='programme'&&d.visuals?.length){toast('Préparation des images pour chaque réseau…');rendered=await renderAll(d)}
-    const data={title:d.title,networks:d.networks,format:d.format,date:d.date||null,time:d.time||'',status:d.status,simple:!!d.simple,captions:d.captions||{},notes:d.notes||'',validations:(live||d).validations||{},stats:d.stats||{},send:d.send||{},fit:d.fit||{},visuals:d.visuals||[],rendered,pin_board:d.pin_board||null,music:d.music||null,updated_at:nowIso()};
+    const data={title:d.title,networks:d.networks,format:d.format,date:d.date||null,time:d.time||'',status:d.status,simple:!!d.simple,captions:d.captions||{},notes:d.notes||'',validations:(live||d).validations||{},stats:d.stats||{},send:d.send||{},fit:d.fit||{},visuals:d.visuals||[],rendered,pin_board:d.pin_board||null,music:d.music||null,formats:Object.fromEntries(d.networks.map(k=>[k,fmtOf(d,k)])),updated_at:nowIso()};
     if(data.status==='a_valider'&&Object.keys(data.validations).length>=(data.simple?1:2))data.status='valide';
     if(live)ok(await T('posts').update(data).eq('id',d.id));else{data.id=d.id;data.created_by=me.id;ok(await T('posts').insert(data))}
     if(d.fromIdea)await T('ideas').delete().eq('id',d.fromIdea);
@@ -773,19 +787,18 @@ async function savePost(){
   });
 }
 async function renderAll(d){
-  const out={};
+  const out={};let slide=null;
   for(const k of d.networks){
     out[k]=[];
-    if(k==='ig'&&d.music?.ig&&photosOnly(d)){
-      toast('Création du Reel diaporama pour Instagram… gardez cet onglet ouvert');
-      const blob=await makeSlideshow(d),path=`rendered/${d.id}/ig/reel-${Date.now()}.mp4`;
-      ok(await sb.storage.from(BUCKET).upload(path,blob,{contentType:'video/mp4',upsert:true,cacheControl:'60'}));
-      out[k].push(path);continue;
+    const size=sizeFor(d,k),fit=d.fit?.[k]||'cover';
+    if(needsVideo(d,k)&&photosOnly(d)){
+      if(!slide){toast('Création de la vidéo diaporama… gardez cet onglet ouvert');const blob=await makeSlideshow(d,fit);slide=`rendered/${d.id}/video-${Date.now()}.mp4`;ok(await sb.storage.from(BUCKET).upload(slide,blob,{contentType:'video/mp4',upsert:true,cacheControl:'60'}))}
+      out[k].push(slide);continue;
     }
     for(let i=0;i<d.visuals.length;i++){
       const v=d.visuals[i];
       if(isVid(v)){out[k].push(v.path);continue}
-      const blob=await renderVis(v,k,d.fit?.[k]||'cover'),path=`rendered/${d.id}/${k}/${pad(i+1)}.jpg`;
+      const blob=await renderVis(v,k,fit,size),path=`rendered/${d.id}/${k}/${pad(i+1)}.jpg`;
       ok(await sb.storage.from(BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:true,cacheControl:'60'}));
       out[k].push(path);
     }
