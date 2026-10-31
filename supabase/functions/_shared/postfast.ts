@@ -72,9 +72,14 @@ export async function postState(pfId: string, socialMediaId: string): Promise<{ 
   const all = list(await pf("GET", `/social-posts?${q}`));
   const p = all.find((x: any) => x.id === pfId);
   if (!p) return { state: "pending" };
-  const s = String(p.status || p.state || "").toUpperCase();
-  const url = p.platformPostUrl || p.postUrl || p.publishedUrl || p.permalink || p.url || null;
-  if (s.includes("FAIL") || s.includes("ERROR")) return { state: "error", error: p.errorMessage || p.error || p.failureReason || "PostFast signale un échec." };
-  if ((s.includes("PUBLISH") && !s.includes("UNPUBLISH")) || p.platformPostId || s === "POSTED" || s === "DONE") return { state: "done", url };
+  // Champs observés : status (DRAFT, SCHEDULED, …), publishedAt, failedAt, platformPostId, lastError.
+  const s = String(p.status || "").toUpperCase();
+  const url = p.platformPostUrl || p.permalink || null;
+  if (p.failedAt || s.includes("FAIL") || s.includes("ERROR")) {
+    const le = p.lastError;
+    const msg = typeof le === "string" ? le : le?.message || le?.error || (le ? JSON.stringify(le) : "");
+    return { state: "error", error: msg ? `PostFast : ${msg}` : "PostFast signale un échec de publication." };
+  }
+  if (p.publishedAt || p.platformPostId || s === "PUBLISHED") return { state: "done", url };
   return { state: "pending" };
 }

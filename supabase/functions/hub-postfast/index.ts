@@ -34,6 +34,28 @@ Deno.serve(async (req) => {
     if (body.action === "status") return json({ key: !!PFX.pfKey() });
     if (!PFX.pfKey()) return json({ error: "La clé PostFast n'est pas encore enregistrée dans Supabase." }, 400);
 
+    if (body.action === "selftest") {
+      // Essai sans publication : envoi d'une image, création d'un BROUILLON Instagram, lecture, suppression.
+      const accs0 = await PFX.accounts();
+      const ig = accs0.find((a: any) => PFX.netOf(a) === "ig");
+      if (!ig) return json({ error: "Aucun compte Instagram dans PostFast." }, 400);
+      const img = "https://wathefr-maker.github.io/select-hub/icons/icon-512.png";
+      const up = await PFX.upload(img, "icon-512.png");
+      const created = await PFX.pf("POST", "/social-posts", {
+        posts: [{ content: "Test du hub Select (brouillon, ne pas publier)", socialMediaId: String(ig.id), status: "DRAFT", mediaItems: [{ key: up.key, type: up.type, sortOrder: 0 }] }],
+        status: "DRAFT",
+        controls: { instagramPublishType: "TIMELINE" },
+      });
+      const id = (created?.postIds || [])[0];
+      const listed = PFX.list(await PFX.pf("GET", `/social-posts?${new URLSearchParams({ socialMediaIds: String(ig.id) })}`));
+      const mine = listed.find((x: any) => x.id === id) || null;
+      let deleted: unknown = null;
+      try { deleted = await PFX.pf("POST", "/social-posts/bulk-delete", { postIds: [id] }); }
+      catch (e) { try { deleted = await PFX.pf("POST", "/social-posts/bulk-delete", { ids: [id] }); } catch (e2) { deleted = "échec suppression : " + (e2 as Error).message; } }
+      const shape = (o: any) => o && Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "object" ? (Array.isArray(v) ? `array(${(v as any[]).length})` : "object") : typeof v === "string" && (v as string).length > 60 ? (v as string).slice(0, 60) + "…" : v]));
+      return json({ upload: { keyPrefix: up.key.slice(0, 12), type: up.type }, created, post: shape(mine), listedCount: listed.length, deleted, account: shape(ig) });
+    }
+
     const accs = await PFX.accounts();
     const byNet: Record<string, any[]> = {};
     for (const a of accs) { const n = PFX.netOf(a); if (n) (byNet[n] = byNet[n] || []).push(a); }
