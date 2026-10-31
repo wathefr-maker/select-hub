@@ -116,7 +116,7 @@ ${m.context ? "\n" + (m.kind === "dm" ? m.context : "Publication commentée : " 
 Message de ${m.from_handle} :
 """${m.text}"""
 
-Rédige UNE réponse prête à envoyer : en français, chaleureuse, courte (1 à 3 phrases), tutoiement si le client tutoie sinon vouvoiement, 1 emoji maximum. N'invente ni prix, ni taille, ni horaire, ni stock absent des infos ci-dessus : si tu ne sais pas, propose de passer en boutique ou d'écrire en message privé. Pour un commentaire public sur un prix ou une dispo, invite à passer en message privé.
+Rédige UNE réponse prête à envoyer : en français, chaleureuse, courte (1 à 3 phrases), tutoiement si le client tutoie sinon vouvoiement, 1 emoji maximum. N'invente ni prix, ni taille, ni horaire, ni stock absent des infos ci-dessus : si tu ne sais pas, propose de passer en boutique ou d'écrire en message privé. Pour un commentaire public sur un prix ou une dispo, invite à passer en message privé.${m.kind === "dm" ? " Ici c'est DÉJÀ une conversation privée : ne propose jamais d'écrire en message privé." : ""} Écris toujours une réponse, même très courte pour un message banal (« ok », emoji…).
 Puis, sur une dernière ligne, écris exactement « Catégorie : » suivi d'un seul mot parmi : dispo, prix, horaires, reprise, autre.`;
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -128,6 +128,7 @@ Puis, sur une dernière ligne, écris exactement « Catégorie : » suivi d'un s
   const txt: string = (j.content || []).map((c: any) => c.text || "").join("").trim();
   const cat = (txt.match(/Catégorie\s*:\s*(dispo|prix|horaires|reprise|autre)/i)?.[1] || "autre").toLowerCase();
   const reply = txt.replace(/\n?\s*Catégorie\s*:.*$/is, "").trim();
+  if (!reply) return null;
   return { reply, type: cat };
 }
 
