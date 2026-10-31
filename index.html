@@ -292,6 +292,55 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .mus .tools select{width:auto}
 .mus .note{font-size:12px;color:var(--muted);margin:0}
 .mus .note.w{color:var(--s-valider)}
+
+/* studio */
+.steps{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;align-items:start;margin-bottom:20px}
+@media (max-width:980px){.steps{grid-template-columns:minmax(0,1fr)}}
+.stepn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;margin-right:8px;font-variant-numeric:tabular-nums}
+.sechead h2{display:flex;align-items:center}
+.search{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.search input[type=text]{flex:1;min-width:200px}
+.prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;max-height:520px;overflow-y:auto;padding:2px}
+.prod{position:relative;display:grid;gap:6px;text-align:left;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:8px;cursor:pointer}
+.prod:hover{border-color:var(--ink)}
+.prod[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.prod img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:3px}
+.prod .t{font-size:12.5px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+.prod .m{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prod .ck{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px}
+.prod[aria-pressed="true"] .ck{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.selchips{display:flex;gap:6px;flex-wrap:wrap}
+.selchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);border-radius:40px;padding:3px 4px 3px 10px;font-size:12px;max-width:100%}
+.selchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selchip button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 4px}
+.styles{display:grid;gap:8px}
+.style{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;cursor:pointer;background:var(--surface)}
+.style:has(input:checked){border-color:var(--ink);background:var(--sunk)}
+.style input{margin:3px 0 0;accent-color:var(--accent)}
+.style b{display:block;font-size:13px}
+.style span{font-size:12px;color:var(--muted)}
+.gobar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.setup{display:grid;gap:6px}
+.setup .h{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
+.setup .h:first-child{border-top:0}
+.setup .ok{color:var(--s-valide)} .setup .no{color:var(--s-valider)}
+.filt{display:flex;gap:6px;flex-wrap:wrap}
+.jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.job{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px;display:grid;gap:10px;min-width:0}
+.job header{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.job header b{font-size:13.5px;overflow-wrap:anywhere}
+.job header .m{font-size:12px;color:var(--muted)}
+.shots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.shot{position:relative;aspect-ratio:2/3;border-radius:4px;overflow:hidden;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center;padding:4px}
+.shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.shot .ix{position:absolute;top:4px;left:4px;font-size:10px;background:rgb(0 0 0 / .6);color:#fff;border-radius:10px;padding:0 5px;z-index:1}
+.shot.wait{background:linear-gradient(110deg,var(--sunk) 30%,var(--line) 50%,var(--sunk) 70%);background-size:200% 100%}
+@media (prefers-reduced-motion:no-preference){.shot.wait{animation:shimmer 1.6s linear infinite}@keyframes shimmer{to{background-position:-200% 0}}}
+.job textarea{min-height:92px;font-size:13px}
+.job .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.job .note{font-size:12px;color:var(--muted)}
+.job .note.err{color:var(--pin)} .job .note.ok{color:var(--s-valide)}
+.pill.en_cours{color:var(--s-programme)} .pill.a_revoir{color:var(--s-valider)} .pill.refuse{color:var(--s-idee)} .pill.erreur{color:var(--pin)}
 </style>
 
 </head>
@@ -343,7 +392,7 @@ const REPERES={
  tt:[['Vidéo et photos','Vertical 9:16 (1080×1920). Un carrousel devient un post photo qui défile, jusqu’à 35 images.'],['Son','Choisissez un son tendance dans le hub (publication directe), ou ajoutez-le dans l’appli si le post part en brouillon.'],['Légende','Courte, 3 à 5 hashtags. Le texte à l’écran compte plus que la légende.'],['Rythme','Changer de plan toutes les 2 à 3 secondes.']],
  pin:[['Format','Vertical 2:3 (1000×1500). Une image propre, peu de texte.'],['Titre','Les mots que les gens cherchent : « sneakers New Balance 2002R tenue ».'],['Lien','Chaque épingle renvoie vers la fiche produit du site.'],['Tableaux','Un tableau par marque, univers ou saison.']]};
 
-const S={posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],settings:[],fbPages:null,pfKey:null,pinBoards:null,status:'loading'};
+const S={studio:[],prompts:[],studioKeys:null,posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],settings:[],fbPages:null,pfKey:null,pinBoards:null,status:'loading'};
 let musicPick=null; const SOUNDS={}; let player=null;
 let sb=null,me={id:null,name:''},canWrite=true,recovery=false,installEvt=null;
 const BUCKET='hub-visuels';
@@ -365,7 +414,7 @@ const fmtDay=s=>s?parse(s).toLocaleDateString('fr-FR',{weekday:'short',day:'nume
 const nf=n=>n==null||n===''?'—':Number(n).toLocaleString('fr-FR');
 
 /* ---------- routing ---------- */
-function routeFromHash(){const h=location.hash.slice(1);return ['tout',...NETS.map(n=>n.slug)].includes(h)?h:'tout'}
+function routeFromHash(){const h=location.hash.slice(1);return ['tout','studio',...NETS.map(n=>n.slug)].includes(h)?h:'tout'}
 addEventListener('hashchange',()=>{route=routeFromHash();window.scrollTo(0,0);render(true)});
 
 /* ---------- helpers ---------- */
@@ -407,7 +456,7 @@ function render(force){
   renderTabs();
   if(['login','denied','recovery','loading'].includes(S.status)){$('#tabs').innerHTML=S.status==='denied'?'<button class="out" data-a="signout">Déconnexion</button>':'';app.innerHTML=authView();return}
   app.innerHTML=(S.status==='offline'?'<div class="banner">Connexion à la base impossible pour l’instant. Vérifiez internet puis rechargez la page.</div>':'')
-    +(route==='tout'?viewAll():viewNet(NETS.find(n=>n.slug===route).k));
+    +(route==='tout'?viewAll():route==='studio'?viewStudio():viewNet(NETS.find(n=>n.slug===route).k));
   for(const id in keep){const e=document.getElementById(id);if(e&&!e.value)e.value=keep[id]}
   fillNames();
 }
@@ -415,8 +464,9 @@ document.addEventListener('focusout',()=>setTimeout(()=>{if(pending&&!$('#app').
 
 function renderTabs(){
   const pend=k=>S.messages.filter(m=>m.net===k&&m.status!=='repondu').length;
-  const av=S.posts.filter(p=>p.status==='a_valider').length;
+  const av=S.posts.filter(p=>p.status==='a_valider').length,rv=S.studio.filter(j=>j.status==='a_revoir').length;
   $('#tabs').innerHTML=`<a href="#tout" ${route==='tout'?'aria-current="page"':''}>Tout${av?`<span class="n" title="À valider">${av}</span>`:''}</a>`+
+   `<a href="#studio" ${route==='studio'?'aria-current="page"':''}>Studio${rv?`<span class="n" title="Carrousels à revoir">${rv}</span>`:''}</a>`+
    NETS.map(n=>`<a href="#${n.slug}" ${route===n.slug?'aria-current="page"':''}><i class="dot ${n.k}"></i>${n.name}${pend(n.k)?`<span class="n" title="Messages à traiter">${pend(n.k)}</span>`:''}</a>`).join('')+
    (installEvt?'<button class="out" data-a="install">Installer l’appli</button>':'')+'<button class="out" data-a="signout" title="Se déconnecter">Déconnexion</button>';
 }
@@ -584,6 +634,120 @@ function statsCard(k){
      <div><button class="btn" type="submit">Enregistrer la semaine</button> <span class="hint">Pour compléter ou corriger à la main (les messages, par exemple). Les chiffres automatiques remplacent la saisie à chaque mise à jour.</span></div></form>
    ${top.length?`<h3 class="eyebrow" style="margin:18px 0 6px">Meilleurs posts</h3><div class="list">${top.map(p=>`<div class="row"><button class="linkish ttl" data-a="open" data-id="${p.id}">${esc(p.title)}</button><span class="count">${nf(p.stats[k].vues)} vues</span></div>`).join('')}</div>`:''}</section>`;
 }
+
+/* ---------- STUDIO ---------- */
+const SJ=[['a_revoir','À revoir'],['en_cours','En cours'],['valide','Validés'],['refuse','Refusés']];
+const SJL={en_cours:'En cours',a_revoir:'À revoir',valide:'Validé',refuse:'Refusé',erreur:'Erreur'};
+const SD={q:'',stock:true,results:null,sel:new Map(),styles:new Set(['produit']),filt:'a_revoir',busy:false,t:null,poll:null};
+const surl=path=>sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+const eur=n=>n==null?'':Number(n).toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+async function studioStatus(){try{const r=await sb.functions.invoke('hub-studio',{body:{action:'status'}});if(!r.error){S.studioKeys=r.data;if(route==='studio')render()}}catch(e){}}
+
+function viewStudio(){
+  const k=S.studioKeys,ready=k?.hf;
+  const n=SD.sel.size*SD.styles.size;
+  const prompts=S.prompts.filter(p=>p.active);
+  return `<div class="pagehead"><div><div class="eyebrow">Studio visuels</div><h1>Créer des carrousels</h1><p>Choisissez des paires, un ou plusieurs styles validés : 3 photos par carrousel, prêtes pour TikTok et Pinterest.</p></div></div>`
+   +(k&&!ready?`<div class="banner">La génération n’est pas encore branchée : il manque la clé Higgsfield API dans Supabase. Vous pouvez déjà préparer votre sélection.</div>`:'')
+   +`<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>Les paires</h2><small>${SD.sel.size} choisie${SD.sel.size>1?'s':''}</small></div>
+     <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
+      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>
+     ${SD.sel.size?`<div class="selchips" style="margin-bottom:12px">${[...SD.sel.values()].map(p=>`<span class="selchip"><span>${esc(p.title)}</span><button data-a="stunsel" data-id="${p.id}" aria-label="Retirer ${esc(p.title)}">×</button></span>`).join('')}</div>`:''}
+     <div id="st-results">${prodGrid()}</div></section>
+    <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les styles</h2><small>validés ensemble</small></div>
+     <div class="styles">${prompts.length?prompts.map(p=>`<label class="style"><input type="checkbox" data-style="${esc(p.id)}" ${SD.styles.has(p.id)?'checked':''}><div><b>${esc(p.name)}</b><span>${esc(p.description)}</span></div></label>`).join(''):'<p class="empty">Aucun style enregistré.</p>'}</div>
+     <div class="gobar"><span class="hint">${n?`<b class="count">${n}</b> carrousel${n>1?'s':''} · ${n*3} photos`:'Choisissez au moins une paire et un style'}</span>
+      <button class="btn primary" data-a="stgo" ${!n||!ready||SD.busy||n>12?'disabled':''}>${SD.busy?'Lancement…':'Générer'}</button></div>
+     ${n>12?'<span class="warn">12 carrousels maximum à la fois.</span>':''}</section>
+     ${setupCard()}</div></div>`
+   +jobsCard();
+}
+function setupCard(){
+  const k=S.studioKeys;if(!k)return '';
+  const row=(ok,l,yes,no)=>`<div class="h"><span>${l}</span><span class="${ok?'ok':'no'}">${ok?yes:no}</span></div>`;
+  return `<section class="card"><div class="sechead"><h2>Branchements</h2></div><div class="setup">
+   ${row(k.hf,'Génération Higgsfield','Branchée','Clé API à ajouter')}
+   ${row(k.ai,'Descriptions des posts','Rédigées par IA','Modèle de texte')}
+   ${row(k.drive,'Copie Google Drive','Branchée','À brancher')}</div></section>`;
+}
+async function searchProducts(){
+  const q=SD.q.trim();
+  let r=sb.from('products').select(SD.stock?'id,title,handle,image_url,min_price,variants!inner(inventory_quantity)':'id,title,handle,image_url,min_price,variants(inventory_quantity)').order('updated_at',{ascending:false}).limit(30);
+  if(SD.stock)r=r.gt('variants.inventory_quantity',0);
+  q.split(/\s+/).filter(Boolean).forEach(w=>{r=r.ilike('title',`%${w.replace(/[%_,()]/g,'')}%`)});
+  const res=await r;
+  if(res.error){SD.results=[];toast('Recherche impossible');console.warn(res.error)}
+  else SD.results=res.data.map(p=>({...p,stock:(p.variants||[]).reduce((a,v)=>a+Math.max(0,v.inventory_quantity||0),0)}));
+  const el=$('#st-results');if(el)el.innerHTML=prodGrid();
+}
+function prodGrid(){
+  if(SD.results===null){setTimeout(searchProducts,0);return '<p class="empty">Chargement du catalogue…</p>'}
+  if(!SD.results.length)return `<p class="empty">Aucune paire ${SD.stock?'en stock ':''}ne correspond.</p>`;
+  return `<div class="prods">${SD.results.map(p=>{const on=SD.sel.has(p.id);return `<button class="prod" data-a="stsel" data-id="${p.id}" aria-pressed="${on}"><span class="ck" aria-hidden="true">${on?'✓':''}</span>${p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:''}<span class="t">${esc(p.title)}</span><span class="m">${eur(p.min_price)} · ${p.stock} en stock</span></button>`}).join('')}</div>`;
+}
+function studioPill(s){return `<span class="pill ${s}">${esc(SJL[s]||s)}</span>`}
+function jobOrder(j){const pr=S.prompts.find(p=>p.id===j.prompt_id);const o=pr?.post_order?.length?pr.post_order:[1,2,3];return o}
+function jobCard(j){
+  const imgs=j.images||[],order=jobOrder(j);
+  const shots=order.map((n,i)=>{const im=imgs.find(x=>x.n===n);
+    if(im)return `<a class="shot" href="${esc(surl(im.path))}" target="_blank" rel="noopener"><span class="ix">${i+1}</span><img src="${esc(surl(im.path))}" alt="Photo ${i+1} du carrousel ${esc(j.product_title)}" loading="lazy"></a>`;
+    const waiting=j.status==='en_cours';const label=!waiting?'—':n===1?(j.step<=1?'Photo de référence en cours…':''):(j.step<2?'Attend la photo de référence':'En cours…');
+    return `<div class="shot ${waiting?'wait':''}"><span class="ix">${i+1}</span>${label}</div>`}).join('');
+  const cap=j.captions||{};
+  let body='';
+  if(j.status==='a_revoir')body=`<label class="f">Légende TikTok<textarea id="sj-tt-${j.id}" data-jcap="tt" data-id="${j.id}">${esc(cap.tt||'')}</textarea></label>
+     <label class="f">Description Pinterest<textarea id="sj-pin-${j.id}" data-jcap="pin" data-id="${j.id}">${esc(cap.pin||'')}</textarea></label>
+     <div class="acts"><button class="btn primary" data-a="stok" data-id="${j.id}">Valider</button><button class="btn" data-a="stretry" data-id="${j.id}">Régénérer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Refuser</button>${S.studioKeys?.ai?`<button class="btn sm ghost" data-a="stcap" data-id="${j.id}">Nouvelles légendes</button>`:''}</div>`;
+  else if(j.status==='valide'){const d=j.drive||{},post=S.posts.find(p=>p.id===j.post_id);
+    body=`<div class="note ${post?'ok':''}">${post?`Post brouillon créé · ${pill(post.status)}`:'Post supprimé du calendrier'}</div>
+     <div class="note ${d.done?'ok':'err'}">${d.done?`Copié dans Google Drive${d.url?` · <a href="${esc(d.url)}" target="_blank" rel="noopener">ouvrir le dossier</a>`:''}`:`Google Drive : ${esc(d.error||'non copié')}`}</div>
+     <div class="acts">${post?`<button class="btn primary" data-a="open" data-id="${post.id}">Programmer le post</button>`:''}${!d.done&&S.studioKeys?.drive?`<button class="btn sm" data-a="stdrive" data-id="${j.id}">Renvoyer vers Drive</button>`:''}</div>`}
+  else if(j.status==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="stretry" data-id="${j.id}">Relancer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Retirer</button></div>`;
+  else if(j.status==='refuse')body=`<div class="acts"><button class="btn sm" data-a="stretry" data-id="${j.id}">Régénérer</button></div>`;
+  else body=`<div class="note">Environ 1 à 3 minutes. Vous pouvez quitter la page : la génération continue.</div>`;
+  return `<article class="job"><header><div><b>${esc(j.product_title)}</b><div class="m">${esc(j.prompt_name)} · ${ago(j.created_at)}</div></div>${studioPill(j.status)}</header><div class="shots">${shots}</div>${body}</article>`;
+}
+function jobsCard(){
+  const inF=(j,f)=>f==='en_cours'?['en_cours','erreur'].includes(j.status):j.status===f;
+  const cnt=f=>S.studio.filter(j=>inF(j,f)).length;
+  const list=S.studio.filter(j=>inF(j,SD.filt)).sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  return `<section class="card"><div class="sechead"><h2><span class="stepn">3</span>Les carrousels</h2><div class="filt" role="group" aria-label="Filtrer les carrousels">${SJ.map(([s,l])=>`<button class="btn sm ${SD.filt===s?'primary':''}" data-a="stfilt" data-v="${s}" aria-pressed="${SD.filt===s}">${l} <span class="count">${cnt(s)}</span></button>`).join('')}</div></div>
+   ${list.length?`<div class="jobs">${list.map(jobCard).join('')}</div>`:`<p class="empty">${SD.filt==='a_revoir'?'Rien à revoir pour l’instant.':'Aucun carrousel ici.'}</p>`}</section>`;
+}
+function studioPoll(){
+  const running=S.studio.filter(j=>j.status==='en_cours').map(j=>j.id);
+  clearTimeout(SD.poll);
+  if(running.length&&document.visibilityState==='visible')SD.poll=setTimeout(async()=>{try{await sb.functions.invoke('hub-studio',{body:{action:'tick',ids:running}});await loadTable('studio')}catch(e){}studioPoll()},12000);
+}
+async function studioCall(body,btn,okMsg){
+  if(btn){btn.disabled=true}
+  try{const r=await sb.functions.invoke('hub-studio',{body});if(r.error){let m=r.error.message;try{m=(await r.error.context.json()).error||m}catch(_){}toast(m);return null}
+    await loadTable('studio');if(okMsg)toast(okMsg);return r.data}
+  catch(e){toast('Pas de réponse, réessayez');return null}
+  finally{if(btn)btn.disabled=false}
+}
+async function studioGo(btn){
+  if(SD.busy)return;SD.busy=true;render(true);
+  const d=await studioCall({action:'start',product_ids:[...SD.sel.keys()],prompt_ids:[...SD.styles]},null);
+  SD.busy=false;
+  if(d){const n=d.ids?.length||0;toast(`${n} carrousel${n>1?'s':''} lancé${n>1?'s':''}`);SD.sel.clear();SD.filt='en_cours'}
+  render(true);studioPoll();
+}
+async function studioApprove(id,btn){
+  const caps={};['tt','pin'].forEach(k=>{const t=document.getElementById(`sj-${k}-${id}`);if(t)caps[k]=t.value});
+  btn.textContent='Validation…';
+  const d=await studioCall({action:'approve',id,captions:caps},btn);
+  if(!d){btn.textContent='Valider';return}
+  await loadTable('posts');
+  toast(d.drive?.done?'Validé : post brouillon créé et photos copiées dans Drive':'Validé : post brouillon créé'+(S.studioKeys?.drive?' (Drive : échec)':''));
+}
+document.addEventListener('input',e=>{if(e.target.id==='st-q'){SD.q=e.target.value;clearTimeout(SD.t);SD.t=setTimeout(searchProducts,300)}});
+document.addEventListener('change',e=>{
+  if(e.target.id==='st-stock'){SD.stock=e.target.checked;searchProducts()}
+  const s=e.target.dataset?.style;if(s){e.target.checked?SD.styles.add(s):SD.styles.delete(s);render(true)}
+});
+document.addEventListener('focusout',e=>{const k=e.target.dataset?.jcap,id=e.target.dataset?.id;if(!k||!id||!sb)return;const j=S.studio.find(x=>x.id===id);if(!j||(j.captions?.[k]||'')===e.target.value)return;j.captions={...(j.captions||{}),[k]:e.target.value};T('studio').update({captions:j.captions}).eq('id',id).then(r=>{if(r.error)toast('Légende non enregistrée')})});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')studioPoll()});
 
 /* ---------- editor ---------- */
 function openEditor(p,preset={}){
@@ -870,6 +1034,15 @@ document.addEventListener('click',async e=>{
   else if(a==='delmsg')guard(async()=>{ok(await T('messages').delete().eq('id',id));await loadTable('messages')});
   else if(a==='delmember')guard(async()=>{ok(await T('members').delete().eq('email',id));await loadTable('members');toast('Accès retiré')});
   else if(a==='signout'){await sb.auth.signOut();location.hash='';location.reload()}
+  else if(a==='stsel'){const n=+id;if(SD.sel.has(n))SD.sel.delete(n);else{const p=(SD.results||[]).find(x=>x.id===n);if(p)SD.sel.set(n,p)}render(true)}
+  else if(a==='stunsel'){SD.sel.delete(+id);render(true)}
+  else if(a==='stgo')studioGo(b);
+  else if(a==='stfilt'){SD.filt=b.dataset.v;render(true)}
+  else if(a==='stok')studioApprove(id,b);
+  else if(a==='stno')studioCall({action:'reject',id},b,'Carrousel refusé');
+  else if(a==='stretry'){b.textContent='Relance…';await studioCall({action:'retry',id},b,'Nouvelle génération lancée');SD.filt='en_cours';render(true);studioPoll()}
+  else if(a==='stcap'){b.textContent='Rédaction…';await studioCall({action:'captions',id},b,'Nouvelles légendes proposées')}
+  else if(a==='stdrive')studioCall({action:'approve',id,drive_again:true},b,'Envoi vers Drive relancé');
   else if(a==='program'){const s=document.getElementById('e-status');if(s)s.value='programme';savePost()}
   else if(a==='mopen'){readEditor();const k=b.dataset.k;if(musicPick?.k===k){musicPick=null;stopPreview();renderEditor();return}musicPick={k,list:null,q:'',genre:''};loadSounds(k)}
   else if(a==='msearch'){readEditor();if(musicPick){musicPick.q=document.getElementById('mp-q')?.value.trim()||'';musicPick.genre=document.getElementById('mp-genre')?.value||'';if(b.dataset.k==='tt'&&musicPick.list){renderEditor();document.getElementById('mp-q')?.focus()}else loadSounds(b.dataset.k)}}
@@ -940,11 +1113,12 @@ async function doLogin(mode){
 }
 
 /* ---------- data ---------- */
-const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net'],settings:['settings','key']};
+const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net'],settings:['settings','key'],studio:['studio','created_at'],prompts:['prompts','position']};
 async function loadTable(n){
   const r=await T(TABLES[n][0]).select('*').order(TABLES[n][1]);if(r.error)throw r.error;
   if(n==='kpis'){const o={};r.data.forEach(x=>{(o[x.week]=o[x.week]||{week:x.week})[x.net]={abonnes:x.abonnes,vues:x.vues,interactions:x.interactions,messages:x.messages}});S.kpis=o}
   else S[n]=r.data;
+  if(n==='studio')studioPoll();
   if(n==='posts'&&draft?.id){const l=S.posts.find(x=>x.id===draft.id);if(l&&(JSON.stringify(l.validations||{})!==JSON.stringify(draft.validations||{})||JSON.stringify(l.published||{})!==JSON.stringify(draft.published||{}))){readEditor();draft.validations=l.validations||{};draft.published=l.published||{};draft.status=l.status;renderEditor()}}
   render();
 }
@@ -959,6 +1133,7 @@ async function start(){
   if(!m.data){S.status='denied';render(true);return}
   try{await Promise.all(Object.keys(TABLES).map(loadTable));S.status='ready'}catch(e){console.warn(e);S.status='offline'}
   sb.functions.invoke('hub-postfast',{body:{action:'status'}}).then(r=>{S.pfKey=!!r.data?.key;render()}).catch(()=>{});
+  studioStatus();
   render(true);
   if(!channel){channel=sb.channel('hub-select');Object.keys(TABLES).forEach(n=>channel.on('postgres_changes',{event:'*',schema:'public',table:'hub_'+TABLES[n][0]},()=>loadTable(n).catch(()=>{})));channel.subscribe()}
 }
