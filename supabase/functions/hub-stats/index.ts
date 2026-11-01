@@ -45,6 +45,7 @@ function mapMetric(m: any) {
   const walk = (o: any, pre = "") => {
     for (const [k, v] of Object.entries(o || {})) {
       if (typeof v === "number") flat[(pre + k).toLowerCase()] = v;
+      else if (typeof v === "string" && /^\d+$/.test(v)) flat[(pre + k).toLowerCase()] = Number(v);
       else if (v && typeof v === "object" && !Array.isArray(v)) walk(v, pre + k + ".");
     }
   };
@@ -175,7 +176,8 @@ async function run() {
       const h = await PFX.pf("GET", `/social-media/${c.account_id}/follower-history`);
       const series = h.series || h.data || [];
       const last = series[series.length - 1];
-      ab = h.current ?? h.currentCount ?? last?.count ?? last?.followers ?? last?.value ?? null;
+      const raw = h.currentFollowerCount ?? last?.followerCount ?? h.current ?? last?.count ?? null;
+      ab = raw == null || raw === "" ? null : Number(raw);
     } catch (_e) { /* pas encore d'historique */ }
     kpi[net] = { abonnes: ab, vues: sumWeek(net, ["vues"]), interactions: sumWeek(net, ["likes", "comm", "partages", "enreg"]) };
   }
