@@ -49,7 +49,7 @@ export async function submitImage(p: { prompt: string; images: string[]; aspect:
     prompt: p.prompt,
     image_urls: p.images.slice(0, 16),
     aspect_ratio: p.aspect,
-    resolution: "2k",
+    resolution: "1k", // essai 1K (avant : 2k)
     quality: "high",
   }, p.idem);
   const id = r?.request_id || r?.id;
