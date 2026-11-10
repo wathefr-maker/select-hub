@@ -735,7 +735,7 @@ function viewToday(){
   return head(d,name?`Bonjour ${esc(name)}`:'Aujourd’hui',rows.length?`${rows.length} chose${rows.length>1?'s':''} t’attend${rows.length>1?'ent':''}.`:'Tout est à jour.',newBtn())
    +kpiStrip(NETS.map(n=>n.k))
    +`<div class="desk"><div class="stack"><section class="card"><div class="sechead"><h2>À faire</h2><small>${rows.length}</small></div>${rows.length?`<div class="todos">${rows.join('')}</div>`:'<p class="empty">Rien en attente. Bonne journée !</p>'}</section>${recapCard()}</div>
-     <div class="stack"><section class="card"><div class="sechead"><h2>Prochaines publications</h2><a class="hint" href="#planning">Voir le planning</a></div><div class="list">${up.length?up.map(p=>`<button class="up" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${fmtDay(p.date)}${p.time?' · '+esc(p.time):''} ${dots(p.networks)}</span></span>${pill(p.status)}</button>`).join(''):'<p class="empty">Rien de prévu pour l’instant.</p>'}</div></section>${ideasCard()}</div></div>`;
+     <div class="stack"><section class="card"><div class="sechead"><h2>Prochaines publications</h2><a class="hint" href="#planning">Voir le planning</a></div><div class="list">${up.length?up.map(p=>`<button class="up" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${fmtDay(p.date)}${p.time?' · '+esc(p.time):''} ${dots(p.networks)}</span></span>${pill(p.status)}</button>`).join(''):'<p class="empty">Rien de prévu pour l’instant.</p>'}</div></section></div></div>`;
 }
 
 function weekCard(){
