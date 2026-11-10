@@ -313,6 +313,19 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .prod .ck{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px}
 .prod[aria-pressed="true"] .ck{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .selchips{display:flex;gap:6px;flex-wrap:wrap}
+.refs{display:grid;gap:10px;margin-bottom:14px}
+.refrow{border:1px solid var(--line);background:var(--sunk);border-radius:10px;padding:12px}
+.refrow .rh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.refrow .rh b{display:block;font-size:13.5px}.refrow .rh span{font-size:12px;color:var(--muted)}.refrow .rh span.few{color:#E9B949}
+.refimgs{display:flex;gap:8px;flex-wrap:wrap}
+.refimg{position:relative;width:72px;height:72px;border-radius:8px;border:2px solid transparent;background:#fff;padding:0;cursor:pointer;overflow:hidden;opacity:.4}
+.refimg[aria-pressed="true"]{border-color:var(--accent);opacity:1}
+.refimg img{width:100%;height:100%;object-fit:contain}
+.refimg .ck{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+.refimg[aria-pressed="false"] .ck{background:rgba(0,0,0,.35)}
+.refadd{width:72px;height:72px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);cursor:pointer;text-align:center}
+.refadd:hover{border-color:var(--accent);color:var(--ink)}
+.refrow .hint{margin:8px 0 0;font-size:12px}
 .selchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);border-radius:40px;padding:3px 4px 3px 10px;font-size:12px;max-width:100%}
 .selchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selchip button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 4px}
@@ -800,7 +813,7 @@ document.addEventListener('drop',e=>{const d=e.target.closest?.('[data-day]');if
 /* ---------- STUDIO ---------- */
 const SJ=[['a_revoir','À revoir'],['en_cours','En cours'],['valide','Validés'],['refuse','Refusés']];
 const SJL={en_cours:'En cours',a_revoir:'À revoir',valide:'Validé',refuse:'Refusé',erreur:'Erreur'};
-const SD={q:'',stock:true,results:null,sel:new Map(),styles:new Set(['produit']),filt:'a_revoir',busy:false,t:null,poll:null};
+const SD={q:'',stock:true,results:null,sel:new Map(),styles:new Set(['produit']),refs:new Map(),filt:'a_revoir',busy:false,t:null,poll:null};
 const surl=path=>sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 const eur=n=>n==null?'':Number(n).toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
 async function studioStatus(){try{const r=await sb.functions.invoke('hub-studio',{body:{action:'status'}});if(!r.error){S.studioKeys=r.data;if(route==='studio')render()}}catch(e){}}
@@ -814,7 +827,7 @@ function viewStudio(){
    +`<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>Les paires</h2><small>${SD.sel.size} choisie${SD.sel.size>1?'s':''}</small></div>
      <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
       <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>
-     ${SD.sel.size?`<div class="selchips" style="margin-bottom:12px">${[...SD.sel.values()].map(p=>`<span class="selchip"><span>${esc(p.title)}</span><button data-a="stunsel" data-id="${p.id}" aria-label="Retirer ${esc(p.title)}">×</button></span>`).join('')}</div>`:''}
+     ${refsPanel()}
      <div id="st-results">${prodGrid()}</div></section>
     <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les styles</h2><small>validés ensemble</small></div>
      <div class="styles">${prompts.length?prompts.map(p=>`<label class="style"><input type="checkbox" data-style="${esc(p.id)}" ${SD.styles.has(p.id)?'checked':''}><div><b>${esc(p.name)}</b><span>${esc(p.description)}</span></div></label>`).join(''):'<p class="empty">Aucun style enregistré.</p>'}</div>
@@ -824,6 +837,31 @@ function viewStudio(){
      ${setupCard()}</div></div>`
    +jobsCard();
 }
+const REFMAX=8;
+function refsPanel(){
+  if(!SD.sel.size)return '';
+  return `<div class="refs">${[...SD.sel.values()].map(p=>{const r=SD.refs.get(p.id)||{loading:true,all:[],on:[]};const n=r.on.length;
+    return `<div class="refrow"><div class="rh"><div><b>${esc(p.title)}</b><span class="${!r.loading&&n<3?'few':''}">${r.loading?'Chargement des photos…':`${n} photo${n>1?'s':''} envoyée${n>1?'s':''} à Higgsfield`}</span></div><button class="btn sm ghost" data-a="stunsel" data-id="${p.id}" aria-label="Retirer ${esc(p.title)}">Retirer</button></div>
+     ${r.loading?'':`<div class="refimgs">${r.all.map((u,i)=>{const on=r.on.includes(u);return `<button class="refimg" data-a="stref" data-id="${p.id}" data-u="${i}" aria-pressed="${on}" title="${on?'Envoyée : cliquer pour l’enlever':'Pas envoyée : cliquer pour l’ajouter'}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"><span class="ck" aria-hidden="true">${on?'✓':''}</span></button>`}).join('')}
+      ${r.on.length<REFMAX?`<label class="refadd" title="Ajouter vos photos de la paire">${r.up?'Envoi…':'+ Ajouter'}<input type="file" accept="image/*" multiple data-refup="${p.id}" hidden></label>`:''}</div>
+     ${n<3?'<p class="hint">Conseil : 3 à 5 photos (profil, dessus, semelle, talon) donnent des visuels plus fidèles à la paire.</p>':''}`}</div>`}).join('')}</div>`;
+}
+async function loadRefs(pid){
+  SD.refs.set(pid,{loading:true,all:[],on:[]});
+  let all=[];try{const r=await sb.functions.invoke('hub-studio',{body:{action:'refs',product_id:pid}});all=r.data?.images||[]}catch(e){}
+  if(!all.length){const p=SD.sel.get(pid);if(p?.image_url)all=[p.image_url]}
+  if(SD.sel.has(pid))SD.refs.set(pid,{loading:false,all,on:all.slice(0,4)});
+  if(route==='studio')render(true);
+}
+async function uploadRefs(pid,files){
+  const r=SD.refs.get(pid);if(!r)return;r.up=true;render(true);
+  for(const f of files){if(r.on.length>=REFMAX){toast(`${REFMAX} photos maximum par paire`);break}
+    try{const ext=(f.type.split('/')[1]||'jpg').replace('jpeg','jpg');const path=`refs/${crypto.randomUUID()}.${ext}`;
+      const u=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type,cacheControl:'31536000'});if(u.error)throw u.error;
+      const url=surl(path);r.all.push(url);r.on.push(url)}catch(e){toast('Envoi de la photo impossible');console.warn(e)}}
+  r.up=false;render(true);
+}
+document.addEventListener('change',e=>{const pid=e.target.dataset?.refup;if(pid&&e.target.files?.length)uploadRefs(+pid,[...e.target.files])});
 function setupCard(){
   const k=S.studioKeys;if(!k)return '';
   const row=(ok,l,yes,no)=>`<div class="h"><span>${l}</span><span class="${ok?'ok':'no'}">${ok?yes:no}</span></div>`;
@@ -890,9 +928,9 @@ async function studioCall(body,btn,okMsg){
 }
 async function studioGo(btn){
   if(SD.busy)return;SD.busy=true;render(true);
-  const d=await studioCall({action:'start',product_ids:[...SD.sel.keys()],prompt_ids:[...SD.styles]},null);
+  const d=await studioCall({action:'start',product_ids:[...SD.sel.keys()],prompt_ids:[...SD.styles],refs:Object.fromEntries([...SD.refs].filter(([,r])=>r.on.length).map(([k,r])=>[k,r.on]))},null);
   SD.busy=false;
-  if(d){const n=d.ids?.length||0;toast(`${n} carrousel${n>1?'s':''} lancé${n>1?'s':''}`);SD.sel.clear();SD.filt='en_cours'}
+  if(d){const n=d.ids?.length||0;toast(`${n} carrousel${n>1?'s':''} lancé${n>1?'s':''}`);SD.sel.clear();SD.refs.clear();SD.filt='en_cours'}
   render(true);studioPoll();
 }
 async function studioApprove(id,btn){
@@ -1203,8 +1241,9 @@ document.addEventListener('click',async e=>{
   else if(a==='delmsg')guard(async()=>{ok(await T('messages').delete().eq('id',id));await loadTable('messages')});
   else if(a==='delmember')guard(async()=>{ok(await T('members').delete().eq('email',id));await loadTable('members');toast('Accès retiré')});
   else if(a==='signout'){await sb.auth.signOut();location.hash='';location.reload()}
-  else if(a==='stsel'){const n=+id;if(SD.sel.has(n))SD.sel.delete(n);else{const p=(SD.results||[]).find(x=>x.id===n);if(p)SD.sel.set(n,p)}render(true)}
-  else if(a==='stunsel'){SD.sel.delete(+id);render(true)}
+  else if(a==='stsel'){const n=+id;if(SD.sel.has(n))SD.sel.delete(n);else{const p=(SD.results||[]).find(x=>x.id===n);if(p){SD.sel.set(n,p);loadRefs(n)}}if(!SD.sel.has(n))SD.refs.delete(n);render(true)}
+  else if(a==='stunsel'){SD.sel.delete(+id);SD.refs.delete(+id);render(true)}
+  else if(a==='stref'){const r=SD.refs.get(+id);if(r){const u=r.all[+b.dataset.u];if(r.on.includes(u))r.on=r.on.filter(x=>x!==u);else if(r.on.length<REFMAX)r.on.push(u);else toast(`${REFMAX} photos maximum par paire`);render(true)}}
   else if(a==='stgo')studioGo(b);
   else if(a==='stfilt'){SD.filt=b.dataset.v;render(true)}
   else if(a==='stok')studioApprove(id,b);

@@ -2,6 +2,7 @@
 //  - start   : crée un carrousel par paire × style choisis et lance la photo 1 chez Higgsfield
 //  - tick    : fait avancer les carrousels en cours (aussi lancé chaque minute par pg_cron)
 //  - approve : range les photos dans Google Drive et crée un post brouillon TikTok + Pinterest
+//  - refs    : liste les photos de la fiche produit, pour choisir celles envoyées à Higgsfield
 //  - reject / retry / captions / status
 // La photo 1 sert de référence aux photos 2 et 3 pour garder le même décor et la même tenue.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -31,7 +32,8 @@ const driveSecret = () => Deno.env.get("DRIVE_WEBHOOK_SECRET") || "";
 /* ---------- produits ---------- */
 
 /** Photos produit publiques de la fiche Shopify (sans le guide des tailles). */
-async function productImages(handle: string, fallback?: string | null): Promise<string[]> {
+const MAX_REFS = 8;
+async function productImages(handle: string, fallback?: string | null, all = false): Promise<string[]> {
   try {
     const r = await fetch(`${SHOP}/products/${encodeURIComponent(handle)}.js`, { headers: { Accept: "application/json" } });
     if (r.ok) {
@@ -43,10 +45,23 @@ async function productImages(handle: string, fallback?: string | null): Promise<
         .filter(Boolean);
       if (!urls.length && Array.isArray(p.images)) urls = p.images;
       urls = urls.map((u: string) => (u.startsWith("//") ? "https:" + u : u));
-      if (urls.length) return urls.slice(0, 2);
+      if (urls.length) return all ? urls.slice(0, 12) : urls.slice(0, 2);
     }
   } catch { /* on retombe sur l'image principale */ }
   return fallback ? [fallback] : [];
+}
+
+// Photos choisies dans le hub : seulement des liens https venant de la boutique ou du stockage du hub
+function cleanRefs(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  const sbHost = new URL(SB_URL).host;
+  const ok = (u: string) => {
+    try {
+      const h = new URL(u);
+      return h.protocol === "https:" && (h.host === sbHost || h.host.endsWith("shopify.com") || h.host.endsWith("selectbythibaud.com"));
+    } catch { return false; }
+  };
+  return [...new Set(list.filter((u) => typeof u === "string" && ok(u)) as string[])].slice(0, MAX_REFS);
 }
 
 /* ---------- textes des posts ---------- */
@@ -54,7 +69,7 @@ async function productImages(handle: string, fallback?: string | null): Promise<
 function template(job: any) {
   const t = job.product_title;
   const brand = (t.split(" ")[0] || "sneakers").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const price = job.product_price ? ` · ${String(job.product_price).replace(".", ",")} €` : "";
+  const price = job.product_price ? ` · ${Number(job.product_price).toFixed(2).replace(".", ",")} €` : "";
   return {
     tt: `${t} 👟\nDispo chez Select, 2 rue de Paris à Vichy, et sur le site${price}.\n#sneakers #${brand} #vichy #sneakershop #outfit`,
     pin: `${t} – idée de tenue sneakers\n${t}, à porter avec un jean brut ou un pantalon large. Disponible chez Select by Thibaud à Vichy et en ligne.\n${job.product_url}`,
@@ -237,6 +252,12 @@ Deno.serve(async (req) => {
 
     if (body.action === "tick") { await tick(body.ids); return json({ ok: true }); }
 
+    if (body.action === "refs") {
+      const { data: p } = await admin.from("products").select("handle,image_url").eq("id", Number(body.product_id)).maybeSingle();
+      if (!p) return json({ error: "Paire introuvable." }, 404);
+      return json({ images: await productImages(p.handle, p.image_url, true), max: MAX_REFS });
+    }
+
     if (body.action === "start") {
       if (!HFX.hfKey()) return json({ error: "La clé Higgsfield API n'est pas encore enregistrée dans Supabase." }, 400);
       const pids: number[] = (body.product_ids || []).map(Number).filter(Boolean);
@@ -247,7 +268,8 @@ Deno.serve(async (req) => {
       const { data: prs } = await admin.from("hub_prompts").select("id,name").in("id", sids);
       const rows: any[] = [];
       for (const p of prods || []) {
-        const refs = await productImages(p.handle, p.image_url);
+        const chosen = cleanRefs(body.refs?.[p.id]);
+        const refs = chosen.length ? chosen : await productImages(p.handle, p.image_url);
         for (const s of prs || []) {
           rows.push({
             product_id: p.id, product_title: p.title, product_handle: p.handle,
