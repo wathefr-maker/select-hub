@@ -5,10 +5,21 @@ export const HF = "https://api.higgsfield.ai";
 export class HfError extends Error {}
 
 export function hfKey(): string | undefined {
-  const k = Deno.env.get("HIGGSFIELD_API_KEY") || "";
-  const s = Deno.env.get("HIGGSFIELD_API_SECRET") || "";
-  if (k && s && !k.includes(":")) return `${k}:${s}`;
-  return k || undefined;
+  const k = (Deno.env.get("HIGGSFIELD_API_KEY") || "").trim();
+  const s = (Deno.env.get("HIGGSFIELD_API_SECRET") || "").trim();
+  // La console Higgsfield donne souvent la clé complète « identifiant:secret » d'un bloc :
+  // on la prend où qu'elle ait été collée.
+  if (k.includes(":")) return k;
+  if (s.includes(":")) return s;
+  if (k && s) return `${k}:${s}`;
+  return k || s || undefined;
+}
+
+/** Forme de la clé, sans la révéler : aide à repérer une inversion identifiant/secret. */
+export function keyShape(): string {
+  const k = (Deno.env.get("HIGGSFIELD_API_KEY") || "").trim();
+  const s = (Deno.env.get("HIGGSFIELD_API_SECRET") || "").trim();
+  return `identifiant ${k.length} car.${k.includes(":") ? " avec « : »" : ""}, secret ${s ? s.length + " car." : "absent"}${s.includes(":") ? " avec « : »" : ""}`;
 }
 
 async function call(method: "GET" | "POST", url: string, body?: unknown, idem?: string): Promise<any> {
@@ -24,7 +35,8 @@ async function call(method: "GET" | "POST", url: string, body?: unknown, idem?: 
   if (!res.ok) {
     const d = json?.detail ?? json?.error ?? json?.message;
     const msg = typeof d === "string" ? d : d ? JSON.stringify(d).slice(0, 300) : text.slice(0, 300) || `Erreur ${res.status}`;
-    if (res.status === 401 || res.status === 403) throw new HfError("Higgsfield refuse la clé API (vérifiez la clé dans Supabase).");
+    if (res.status === 401) throw new HfError(`Higgsfield refuse la clé API (401 : ${msg}) [${keyShape()}].`);
+    if (res.status === 403) throw new HfError(`Higgsfield refuse la demande (403 : ${msg}). Solde API ou accès au modèle à vérifier.`);
     if (res.status === 402) throw new HfError("Solde Higgsfield API insuffisant : rechargez le compte API.");
     throw new HfError(`Higgsfield : ${msg}`);
   }
