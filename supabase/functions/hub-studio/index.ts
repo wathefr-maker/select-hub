@@ -1,7 +1,7 @@
 // hub-studio : le Studio visuels du hub.
 //  - start   : crée un carrousel par paire × style choisis et lance la photo 1 chez Higgsfield
 //  - tick    : fait avancer les carrousels en cours (aussi lancé chaque minute par pg_cron)
-//  - approve : range les photos dans Google Drive et crée un post brouillon TikTok + Pinterest
+//  - approve : range les photos dans Google Drive, crée un post brouillon TikTok (carrousel) et 3 épingles Pinterest
 //  - refs    : liste les photos de la fiche produit, pour choisir celles envoyées à Higgsfield
 //  - reject / retry / captions / status
 // La photo 1 sert de référence aux photos 2 et 3 pour garder le même décor et la même tenue.
@@ -70,13 +70,26 @@ function template(job: any) {
   const t = job.product_title;
   const brand = (t.split(" ")[0] || "sneakers").toLowerCase().replace(/[^a-z0-9]/g, "");
   const price = job.product_price ? ` · ${Number(job.product_price).toFixed(2).replace(".", ",")} €` : "";
+  const pins = [
+    `${t} – idée de tenue sneakers\n${t}, à porter avec un jean brut ou un pantalon large. Disponible chez Select by Thibaud à Vichy et en ligne.\n${job.product_url}`,
+    `${t} en détail\nLes finitions de la ${t} de près : matières, coutures, semelle. Dispo en boutique à Vichy et sur le site.\n${job.product_url}`,
+    `Comment porter la ${t}\nUne idée simple pour assortir la ${t} au quotidien. Disponible chez Select by Thibaud, 2 rue de Paris à Vichy, et en ligne.\n${job.product_url}`,
+  ];
   return {
     tt: `${t} 👟\nDispo chez Select, 2 rue de Paris à Vichy, et sur le site${price}.\n#sneakers #${brand} #vichy #sneakershop #outfit`,
-    pin: `${t} – idée de tenue sneakers\n${t}, à porter avec un jean brut ou un pantalon large. Disponible chez Select by Thibaud à Vichy et en ligne.\n${job.product_url}`,
+    pin: pins[0],
+    pins,
   };
 }
 
-async function captions(job: any): Promise<{ tt: string; pin: string; ai: boolean }> {
+/** Une description Pinterest par photo : l'ancien champ unique sert de repli. */
+function pinList(c: any, job: any): string[] {
+  const base = template(job).pins;
+  const arr = Array.isArray(c?.pins) ? c.pins : [];
+  return [0, 1, 2].map((i) => String(arr[i] || (i === 0 && c?.pin) || base[i]));
+}
+
+async function captions(job: any): Promise<{ tt: string; pin: string; pins: string[]; ai: boolean }> {
   const base = template(job);
   if (!aiKey()) return { ...base, ai: false };
   try {
@@ -85,11 +98,11 @@ async function captions(job: any): Promise<{ tt: string; pin: string; ai: boolea
       headers: { "x-api-key": aiKey(), "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: Deno.env.get("ANTHROPIC_MODEL") || "claude-haiku-5-5",
-        max_tokens: 700,
+        max_tokens: 1200,
         system:
           "Tu écris les textes des posts de Select by Thibaud, boutique de sneakers au 2 rue de Paris à Vichy (shop.selectbythibaud.com). " +
           "Ton : chaleureux, direct, sans superlatifs creux, sans emojis en excès (2 maximum). Français. " +
-          "Réponds uniquement en JSON : {\"tt\": \"...\", \"pin\": \"...\"}.",
+          "Réponds uniquement en JSON : {\"tt\": \"...\", \"pins\": [\"...\", \"...\", \"...\"]}.",
         messages: [{
           role: "user",
           content:
@@ -97,8 +110,10 @@ async function captions(job: any): Promise<{ tt: string; pin: string; ai: boolea
             `Style du carrousel : ${job.prompt_name}.\nFiche produit : ${job.product_url}\n\n` +
             "tt = légende TikTok pour un carrousel photo : 1re ligne accrocheuse (elle sert de titre, 90 caractères max), " +
             "1 ou 2 phrases, mention « dispo en boutique à Vichy et sur le site », puis 4 hashtags pertinents. 300 caractères max.\n" +
-            "pin = description Pinterest : 1re ligne = titre de l'épingle avec les mots que les gens cherchent (marque, modèle, coloris, « tenue »), " +
-            "puis 2 phrases riches en mots-clés, puis l'adresse de la fiche produit seule sur la dernière ligne. 480 caractères max.",
+            "pins = 3 descriptions Pinterest, une par photo du carrousel publiée comme épingle séparée " +
+            "(1 : vue d'ensemble, 2 : détail, 3 : porté ou de profil). Chacune : 1re ligne = titre de l'épingle avec les mots que les gens cherchent " +
+            "(marque, modèle, coloris, « tenue »), différent pour chaque épingle, puis 2 phrases riches en mots-clés, " +
+            "puis l'adresse de la fiche produit seule sur la dernière ligne. 480 caractères max chacune.",
         }],
       }),
     });
@@ -106,9 +121,12 @@ async function captions(job: any): Promise<{ tt: string; pin: string; ai: boolea
     const out = await r.json();
     const text = (out.content || []).map((c: any) => c.text || "").join("");
     const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-    let pin = String(j.pin || base.pin);
-    if (!pin.includes(job.product_url)) pin = `${pin}\n${job.product_url}`;
-    return { tt: String(j.tt || base.tt), pin, ai: true };
+    const pins = [0, 1, 2].map((i) => {
+      let p = String(j.pins?.[i] || base.pins[i]);
+      if (!p.includes(job.product_url)) p = `${p}\n${job.product_url}`;
+      return p;
+    });
+    return { tt: String(j.tt || base.tt), pin: pins[0], pins, ai: true };
   } catch (e) {
     console.warn("captions", e);
     return { ...base, ai: false };
@@ -297,7 +315,7 @@ Deno.serve(async (req) => {
       if (!HFX.hfKey()) return json({ error: "La clé Higgsfield API n'est pas encore enregistrée dans Supabase." }, 400);
       await admin.from("hub_studio").update({
         status: "en_cours", step: 0, reqs: {}, images: [], error: null, lock_at: null,
-        attempt: (job.attempt || 0) + 1, drive: {}, post_id: null, updated_at: nowIso(),
+        attempt: (job.attempt || 0) + 1, drive: {}, post_id: null, post_ids: {}, updated_at: nowIso(),
       }).eq("id", job.id);
       await tick([job.id]);
       return json({ ok: true });
@@ -316,27 +334,45 @@ Deno.serve(async (req) => {
       const caps = { ...(job.captions || {}), ...(body.captions || {}) };
       delete caps.ai;
 
-      let postId = job.post_id;
-      if (!postId) {
-        postId = crypto.randomUUID();
-        const ins = await admin.from("hub_posts").insert({
-          id: postId,
-          title: `${job.product_title} · ${job.prompt_name}`,
-          networks: ["tt", "pin"],
-          format: "Carrousel",
-          status: "brouillon",
-          captions: { tt: caps.tt || "", pin: caps.pin || "" },
-          notes: `Carrousel généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`,
-          visuals: ordered.map((im: any, i: number) => ({ path: im.path, name: `${job.product_title} ${i + 1}` })),
-          send: { ig: "direct", fb: "direct", tt: "brouillon", pin: "direct" },
-          fit: { tt: "contain", pin: "cover" },
-          created_by: email,
+      const pins = pinList(caps, job);
+      caps.pins = pins;
+      caps.pin = pins[0];
+      const ids: any = { ...(job.post_ids || {}) };
+      const legacy = !!job.post_id && !ids.tt; // ancien carrousel : un seul post TikTok + Pinterest déjà créé
+      const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`;
+      // TikTok : le carrousel complet
+      if (!ids.tt && !legacy) {
+        ids.tt = crypto.randomUUID();
+        {
+          const ins = await admin.from("hub_posts").insert({
+            id: ids.tt, title: `${job.product_title} · ${job.prompt_name}`, networks: ["tt"], format: "Carrousel", status: "brouillon",
+            captions: { tt: caps.tt || "" }, notes: note,
+            visuals: ordered.map((im: any, i: number) => ({ path: im.path, name: `${job.product_title} ${i + 1}` })),
+            send: { tt: "brouillon" }, fit: { tt: "contain" }, created_by: email,
+          });
+          if (ins.error) throw ins.error;
+        }
+      }
+      // Pinterest : une épingle par photo
+      if (!legacy && (!Array.isArray(ids.pin) || ids.pin.length < ordered.length)) {
+        ids.pin = [];
+        const rows = ordered.map((im: any, i: number) => {
+          const id = crypto.randomUUID();
+          ids.pin.push(id);
+          return {
+            id, title: `${job.product_title} · épingle ${i + 1}/${ordered.length}`, networks: ["pin"], format: "Épingle", status: "brouillon",
+            captions: { pin: pins[i] || pins[0] }, notes: note,
+            visuals: [{ path: im.path, name: `${job.product_title} ${i + 1}` }],
+            send: { pin: "direct" }, fit: { pin: "cover" }, created_by: email,
+          };
         });
+        const ins = await admin.from("hub_posts").insert(rows);
         if (ins.error) throw ins.error;
       }
+      const postId = ids.tt || job.post_id;
       const drive = job.drive?.done && !body.drive_again ? job.drive : await toDrive(job, ordered);
-      await admin.from("hub_studio").update({ status: "valide", post_id: postId, captions: caps, drive, updated_at: nowIso() }).eq("id", job.id);
-      return json({ ok: true, post_id: postId, drive });
+      await admin.from("hub_studio").update({ status: "valide", post_id: postId, post_ids: ids, captions: caps, drive, updated_at: nowIso() }).eq("id", job.id);
+      return json({ ok: true, post_id: postId, post_ids: ids, drive });
     }
 
     return json({ error: "Action inconnue." }, 400);

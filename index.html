@@ -326,6 +326,10 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .refadd{width:72px;height:72px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);cursor:pointer;text-align:center}
 .refadd:hover{border-color:var(--accent);color:var(--ink)}
 .refrow .hint{margin:8px 0 0;font-size:12px}
+.pins{display:grid;gap:8px;margin:4px 0 10px}.pinsh{display:flex;flex-direction:column;gap:2px}.pinsh b{font-size:12.5px}.pinsh .hint{font-size:11.5px}
+.pinrow{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:start}
+.pinrow img{width:52px;aspect-ratio:2/3;object-fit:cover;border-radius:6px;margin-top:18px}
+.pinrow textarea{min-height:84px}
 .selchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);border-radius:40px;padding:3px 4px 3px 10px;font-size:12px;max-width:100%}
 .selchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selchip button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 4px}
@@ -896,12 +900,14 @@ function jobCard(j){
   const cap=j.captions||{};
   let body='';
   if(j.status==='a_revoir')body=`<label class="f">Légende TikTok<textarea id="sj-tt-${j.id}" data-jcap="tt" data-id="${j.id}">${esc(cap.tt||'')}</textarea></label>
-     <label class="f">Description Pinterest<textarea id="sj-pin-${j.id}" data-jcap="pin" data-id="${j.id}">${esc(cap.pin||'')}</textarea></label>
+     <div class="pins"><div class="pinsh"><b>Pinterest : 3 épingles séparées</b><span class="hint">une par photo, chacune avec sa description</span></div>${order.map((n,i)=>{const im=imgs.find(x=>x.n===n);const pv=(cap.pins||[])[i]??(i===0?cap.pin:'')??'';
+       return `<div class="pinrow">${im?`<img src="${esc(surl(im.path))}" alt="Épingle ${i+1}">`:'<span></span>'}<label class="f">Épingle ${i+1}<textarea id="sj-pin${i}-${j.id}" data-jcap="pin${i}" data-id="${j.id}" placeholder="Laissez vide : une description sera proposée automatiquement">${esc(pv||'')}</textarea></label></div>`}).join('')}</div>
      <div class="acts"><button class="btn primary" data-a="stok" data-id="${j.id}">Valider</button><button class="btn" data-a="stretry" data-id="${j.id}">Régénérer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Refuser</button>${S.studioKeys?.ai?`<button class="btn sm ghost" data-a="stcap" data-id="${j.id}">Nouvelles légendes</button>`:''}</div>`;
-  else if(j.status==='valide'){const d=j.drive||{},post=S.posts.find(p=>p.id===j.post_id);
-    body=`<div class="note ${post?'ok':''}">${post?`Post brouillon créé · ${pill(post.status)}`:'Post supprimé du calendrier'}</div>
+  else if(j.status==='valide'){const d=j.drive||{},post=S.posts.find(p=>p.id===j.post_id);const pinPosts=(j.post_ids?.pin||[]).map(id=>S.posts.find(p=>p.id===id)).filter(Boolean);
+    body=`<div class="note ${post?'ok':''}">${post?`${pinPosts.length?'TikTok : carrousel':'Post brouillon créé'} · ${pill(post.status)}`:'Post supprimé du calendrier'}</div>
+     ${pinPosts.length?`<div class="note ok">Pinterest : ${pinPosts.length} épingles · ${pinPosts.map((p,i)=>`<button class="linkish" data-a="open" data-id="${p.id}">n°${i+1}</button> ${pill(p.status)}`).join(' ')}</div>`:''}
      <div class="note ${d.done?'ok':'err'}">${d.done?`Copié dans Google Drive${d.url?` · <a href="${esc(d.url)}" target="_blank" rel="noopener">ouvrir le dossier</a>`:''}`:`Google Drive : ${esc(d.error||'non copié')}`}</div>
-     <div class="acts">${post?`<button class="btn primary" data-a="open" data-id="${post.id}">Programmer le post</button>`:''}${!d.done&&S.studioKeys?.drive?`<button class="btn sm" data-a="stdrive" data-id="${j.id}">Renvoyer vers Drive</button>`:''}</div>`}
+     <div class="acts">${post?`<button class="btn primary" data-a="open" data-id="${post.id}">${pinPosts.length?'Programmer TikTok':'Programmer le post'}</button>`:''}${pinPosts.length?'<a class="btn" href="#planning">Planifier les épingles</a>':''}${!d.done&&S.studioKeys?.drive?`<button class="btn sm" data-a="stdrive" data-id="${j.id}">Renvoyer vers Drive</button>`:''}</div>`}
   else if(j.status==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="stretry" data-id="${j.id}">Relancer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Retirer</button></div>`;
   else if(j.status==='refuse')body=`<div class="acts"><button class="btn sm" data-a="stretry" data-id="${j.id}">Régénérer</button></div>`;
   else body=`<div class="note">Environ 1 à 3 minutes. Vous pouvez quitter la page : la génération continue.</div>`;
@@ -934,19 +940,24 @@ async function studioGo(btn){
   render(true);studioPoll();
 }
 async function studioApprove(id,btn){
-  const caps={};['tt','pin'].forEach(k=>{const t=document.getElementById(`sj-${k}-${id}`);if(t)caps[k]=t.value});
+  const caps={};const tt=document.getElementById(`sj-tt-${id}`);if(tt)caps.tt=tt.value;
+  const pins=[0,1,2].map(i=>document.getElementById(`sj-pin${i}-${id}`)?.value||'');if(pins.some(Boolean)){caps.pins=pins;caps.pin=pins[0]}
   btn.textContent='Validation…';
   const d=await studioCall({action:'approve',id,captions:caps},btn);
   if(!d){btn.textContent='Valider';return}
   await loadTable('posts');
-  toast(d.drive?.done?'Validé : post brouillon créé et photos copiées dans Drive':'Validé : post brouillon créé'+(S.studioKeys?.drive?' (Drive : échec)':''));
+  const np=d.post_ids?.pin?.length||0;const made=np?`post TikTok + ${np} épingles Pinterest créés`:'post brouillon créé';
+  toast(d.drive?.done?`Validé : ${made}, photos copiées dans Drive`:`Validé : ${made}`+(S.studioKeys?.drive?' (Drive : échec)':''));
 }
 document.addEventListener('input',e=>{if(e.target.id==='st-q'){SD.q=e.target.value;clearTimeout(SD.t);SD.t=setTimeout(searchProducts,300)}});
 document.addEventListener('change',e=>{
   if(e.target.id==='st-stock'){SD.stock=e.target.checked;searchProducts()}
   const s=e.target.dataset?.style;if(s){e.target.checked?SD.styles.add(s):SD.styles.delete(s);render(true)}
 });
-document.addEventListener('focusout',e=>{const k=e.target.dataset?.jcap,id=e.target.dataset?.id;if(!k||!id||!sb)return;const j=S.studio.find(x=>x.id===id);if(!j||(j.captions?.[k]||'')===e.target.value)return;j.captions={...(j.captions||{}),[k]:e.target.value};T('studio').update({captions:j.captions}).eq('id',id).then(r=>{if(r.error)toast('Légende non enregistrée')})});
+document.addEventListener('focusout',e=>{const k=e.target.dataset?.jcap,id=e.target.dataset?.id;if(!k||!id||!sb)return;const j=S.studio.find(x=>x.id===id);if(!j)return;
+  const pm=/^pin(\d)$/.exec(k);
+  if(pm){const pins=[...(j.captions?.pins||[j.captions?.pin||'','',''])];if((pins[+pm[1]]||'')===e.target.value)return;pins[+pm[1]]=e.target.value;j.captions={...(j.captions||{}),pins,pin:pins[0]}}
+  else{if((j.captions?.[k]||'')===e.target.value)return;j.captions={...(j.captions||{}),[k]:e.target.value}}T('studio').update({captions:j.captions}).eq('id',id).then(r=>{if(r.error)toast('Légende non enregistrée')})});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')studioPoll()});
 
 /* ---------- editor ---------- */
