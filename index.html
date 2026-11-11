@@ -405,6 +405,37 @@ a.btn{text-decoration:none;color:var(--ink)}a.btn.primary{color:#fff}
 .up .t b,.tile .t b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .up .t span,.tile .t span{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
 .th{width:38px;height:48px;border-radius:7px;object-fit:cover;background:var(--raised);flex:none;display:block}
+.tg{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-y:auto;max-height:min(76vh,800px)}
+.tg-head,.tg-allday{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));border-bottom:1px solid var(--line);position:sticky;z-index:6;background:var(--surface)}
+.tg-head{top:0}.tg-allday{top:37px}
+.tg-head>div{padding:10px 8px;font-size:12px;color:var(--muted);text-transform:capitalize}.tg-head b{color:var(--ink);font-size:14px;margin-left:2px}
+.tg-head .today b{color:var(--accent)}.tg-head em{font-style:normal;color:var(--accent);font-size:11px;margin-left:4px}
+.tg-allday .lab{font-size:10.5px;color:var(--muted);padding:8px 4px;text-align:right}
+.tg-ad{border-left:1px solid #24231F;min-height:34px;padding:4px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tg-chip{background:var(--raised);border:0;border-left:3px solid var(--c);border-radius:6px;padding:4px 6px;font-size:11.5px;color:inherit;text-align:left;cursor:grab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:4px;align-items:center}
+.tg-body{display:grid;grid-template-columns:52px repeat(7,minmax(0,1fr));position:relative}
+.tg-hours{position:relative}.tg-hours span{position:absolute;right:6px;font-size:10.5px;color:var(--muted);transform:translateY(-6px)}
+.tg-hours span:first-child{transform:none}
+.tg-col{position:relative;border-left:1px solid #24231F;min-width:0}
+.tg-col.today{background:rgba(228,106,51,.035)}.tg-col.pastday{background:rgba(0,0,0,.18)}
+.tg-slot{height:26px;border-top:1px dashed #1F1E1B;cursor:pointer;position:relative}
+.tg-slot.hr{border-top:1px solid #2A2925}
+.tg-slot:hover{background:rgba(255,255,255,.03)}
+.tg-slot.over{background:rgba(228,106,51,.18);outline:1px solid var(--accent);outline-offset:-1px}
+.tg-slot.over::after{content:attr(data-time);position:absolute;left:4px;top:4px;font-size:11px;font-weight:600;color:var(--accent)}
+.tg-ev{position:absolute;height:56px;justify-content:flex-start;z-index:2;display:flex;flex-direction:column;gap:1px;text-align:left;background:var(--raised);border:1px solid #2E2D29;border-left:3px solid var(--c);border-radius:7px;padding:4px 6px;color:inherit;cursor:grab;overflow:hidden}
+.tg-ev:hover{z-index:3;border-color:#4a4943}
+.tg-ev .h{font-size:10.5px;color:var(--muted);display:flex;gap:4px;align-items:center;font-variant-numeric:tabular-nums}
+.tg-ev b{font-size:11.5px;line-height:1.25;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tg-ev i{font-style:normal;font-size:10px;color:var(--muted);margin-left:auto;white-space:nowrap}.tg-ev i.ok{color:#7BC67E}
+.tg-ev.st-programme{background:#1b2a1d;border-color:#2c4a30}
+.tg-ev.past{opacity:.55}
+.dragging .tg-ev,.dragging .tg-chip{pointer-events:none}
+.tg-now{position:absolute;left:0;right:0;height:2px;background:var(--accent);z-index:4;pointer-events:none}
+.tg-now::before{content:'';position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.only-mob{display:none}
+@media (max-width:860px){.only-desk{display:none!important}.only-mob{display:block}}
+.unpl .tile .t b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3}
 .plan{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start}
 @media (max-width:1100px){.plan{grid-template-columns:minmax(0,1fr)}}
 .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
@@ -559,9 +590,11 @@ function render(force){
   $('#side').hidden=!authed;$('#tabbar').hidden=!authed;
   if(!authed){app.innerHTML=authView();return}
   renderTabs();
+  const tgs=document.getElementById('tg-body')?.scrollTop;
   app.innerHTML=(S.status==='offline'?'<div class="banner">Connexion à la base impossible pour l’instant. Vérifiez internet puis rechargez la page.</div>':'')
     +({aujourdhui:viewToday,planning:viewPlanning,messages:viewMessages,stats:viewStats,studio:viewStudio,media:viewMedia,reglages:viewSettings}[route]||viewToday)();
   for(const id in keep){const e=document.getElementById(id);if(e&&!e.value)e.value=keep[id]}
+  const tg=document.getElementById('tg-body');if(tg)tg.scrollTop=tgs!=null?tgs:Math.max(0,((new Date().getHours()-TG0-2)*60/SLOT)*SLH);
   fillNames();
 }
 document.addEventListener('focusout',()=>setTimeout(()=>{if(pending&&!$('#app').contains(document.activeElement))render()},0));
@@ -773,16 +806,41 @@ function viewToday(){
      <div class="stack"><section class="card"><div class="sechead"><h2>Prochaines publications</h2><a class="hint" href="#planning">Voir le planning</a></div><div class="list">${up.length?up.map(p=>`<button class="up" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${fmtDay(p.date)}${p.time?' · '+esc(p.time):''} ${dots(p.networks)}</span></span>${pill(p.status)}</button>`).join(''):'<p class="empty">Rien de prévu pour l’instant.</p>'}</div></section></div></div>`;
 }
 
-function weekCard(){
+function weekListCard(){
   const m=monday(new Date());m.setDate(m.getDate()+7*wk);
   const days=[...Array(7)].map((_,i)=>{const d=new Date(m);d.setDate(d.getDate()+i);return d});
   const byDay={};sortPosts(S.posts.filter(inNF)).forEach(p=>{if(p.date)(byDay[p.date]=byDay[p.date]||[]).push(p)});
   const card=p=>`<button class="wpost" draggable="${p.status!=='publie'}" data-a="open" data-id="${p.id}" style="--c:var(--${(p.networks||[])[0]||'muted'})"><b>${esc(p.title||'Sans titre')}</b><span>${p.time?esc(p.time)+' · ':''}${dots(p.networks)}</span>${pill(p.status)}</button>`;
   return `<div class="week">${days.map(d=>{const s=ymd(d),isT=s===today();return `<div class="wday ${isT?'today':''}" data-day="${s}"><div class="wh"><span>${d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'})}</span>${isT?'<em>Aujourd’hui</em>':''}</div>${(byDay[s]||[]).map(card).join('')}<button class="wadd" data-a="new" data-date="${s}" ${NF!=='all'?`data-net="${NF}"`:''}>+ Ajouter</button></div>`}).join('')}</div>`;
 }
+/* Semaine en grille horaire : on glisse un post sur un créneau pour lui donner jour + heure */
+const TG0=7,TG1=24,SLOT=30,SLH=26;
+function tmin(t){const m=/^(\d{1,2}):(\d{2})/.exec(t||'');return m?(+m[1])*60+(+m[2]):null}
+function weekCard(){
+  const m=monday(new Date());m.setDate(m.getDate()+7*wk);
+  const days=[...Array(7)].map((_,i)=>{const d=new Date(m);d.setDate(d.getDate()+i);return d});
+  const byDay={};sortPosts(S.posts.filter(inNF)).forEach(p=>{if(p.date)(byDay[p.date]=byDay[p.date]||[]).push(p)});
+  const t=today(),now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
+  const nslots=(TG1-TG0)*60/SLOT,H=nslots*SLH;
+  const pos=mn=>Math.max(0,Math.min(H-2*SLH,(mn-TG0*60)/SLOT*SLH));
+  const ev=(p,lane,lanes)=>{const mn=tmin(p.time);const past=p.date<t||p.status==='publie';
+    return `<button class="tg-ev ${past?'past':''} st-${p.status}" draggable="${p.status!=='publie'}" data-a="open" data-id="${p.id}" style="top:${pos(mn)}px;left:calc(${lane*100/lanes}% + 2px);width:calc(${100/lanes}% - 4px);--c:var(--${(p.networks||[])[0]||'muted'})" title="${esc(p.title||'')}">
+      <span class="h">${esc(p.time)} ${dots(p.networks)}${p.status==='programme'?'<i class="ok">✓ Programmé</i>':p.status==='publie'?'<i>Publié</i>':''}</span><b>${esc(p.title||'Sans titre')}</b></button>`};
+  const col=(d)=>{const s=ymd(d);const ps=(byDay[s]||[]).filter(p=>tmin(p.time)!=null).sort((a,b)=>tmin(a.time)-tmin(b.time));
+    const lanesEnd=[];const placed=ps.map(p=>{const st=tmin(p.time),en=st+60;let l=lanesEnd.findIndex(e=>e<=st);if(l<0){l=lanesEnd.length;lanesEnd.push(en)}else lanesEnd[l]=en;return [p,l]});
+    const lanes=Math.max(1,lanesEnd.length);
+    return `<div class="tg-col ${s===t?'today':''} ${s<t?'pastday':''}">${[...Array(nslots)].map((_,i)=>{const mn=TG0*60+i*SLOT,hh=String(Math.floor(mn/60)).padStart(2,'0'),mm=String(mn%60).padStart(2,'0');return `<div class="tg-slot ${mm==='00'?'hr':''}" data-day="${s}" data-time="${hh}:${mm}" data-a="new" data-date="${s}" ${NF!=='all'?`data-net="${NF}"`:''}></div>`}).join('')}
+      ${placed.map(([p,l])=>ev(p,l,lanes)).join('')}
+      ${s===t&&nowMin>=TG0*60&&nowMin<TG1*60?`<div class="tg-now" style="top:${(nowMin-TG0*60)/SLOT*SLH}px"></div>`:''}</div>`};
+  return `<div class="tg only-desk" id="tg-body">
+    <div class="tg-head"><div></div>${days.map(d=>{const s=ymd(d);return `<div class="${s===t?'today':''}">${d.toLocaleDateString('fr-FR',{weekday:'short'})} <b>${d.getDate()}</b>${s===t?' <em>Aujourd’hui</em>':''}</div>`}).join('')}</div>
+    <div class="tg-allday"><div class="lab">Sans heure</div>${days.map(d=>{const s=ymd(d);return `<div class="tg-ad" data-day="${s}">${(byDay[s]||[]).filter(p=>tmin(p.time)==null).map(p=>`<button class="tg-chip" draggable="${p.status!=='publie'}" data-a="open" data-id="${p.id}" style="--c:var(--${(p.networks||[])[0]||'muted'})">${dots(p.networks)} ${esc(p.title||'Sans titre')}</button>`).join('')}</div>`}).join('')}</div>
+    <div class="tg-body"><div class="tg-hours">${[...Array(TG1-TG0)].map((_,i)=>`<span style="top:${i*60/SLOT*SLH}px">${String(TG0+i).padStart(2,'0')}:00</span>`).join('')}</div>${days.map(col).join('')}</div>
+  </div><div class="only-mob">${weekListCard()}</div>`;
+}
 function unplannedCard(){
   const ps=sortPosts(S.posts.filter(p=>!p.date&&p.status!=='publie'&&inNF(p)));
-  return `<aside class="card unpl"><div class="sechead"><h2>À planifier</h2><small>${ps.length}</small></div><p class="hint" style="margin:0 0 10px">Glissez une carte sur un jour pour lui donner une date.</p>
+  return `<aside class="card unpl"><div class="sechead"><h2>À planifier</h2><small>${ps.length}</small></div><p class="hint" style="margin:0 0 10px">Glissez une carte sur un créneau du calendrier : elle prend le jour et l’heure.</p>
    <div class="list">${ps.length?ps.map(p=>`<div class="tilew${HL.has(p.id)?' hl':''}"><button class="tile" draggable="true" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${dots(p.networks)} ${esc(STL[p.status])}</span></span></button><button class="tdel${delAsk===p.id?' ask':''}" data-a="qdel" data-id="${p.id}" aria-label="Supprimer ${esc(p.title||'ce post')}" title="${delAsk===p.id?'Cliquer encore pour supprimer':'Supprimer'}">${delAsk===p.id?'Supprimer ?':'×'}</button></div>`).join(''):'<p class="empty">Tout a une date. Les carrousels validés dans le Studio arrivent ici.</p>'}</div></aside>`;
 }
 function viewPlanning(){
@@ -822,15 +880,20 @@ function viewSettings(){
    +`<div class="grid2">${connCard()}<div class="stack">${setupCard()}${teamCard()}</div></div>`
    +`<div class="grid2" style="margin-top:20px">${storeCard()}<section class="card"><div class="sechead"><h2>Repères par réseau</h2></div>${NETS.map(n=>`<details class="rep"><summary><i class="dot ${n.k}"></i> ${n.name}</summary><ul class="reperes">${REPERES[n.k].map(([a,b])=>`<li><b>${esc(a)}</b><span>${esc(b)}</span></li>`).join('')}</ul></details>`).join('')}</section></div>`;
 }
-async function movePost(id,date){
-  const p=S.posts.find(x=>x.id===id);if(!p||p.date===date)return;
+async function movePost(id,date,time){
+  const p=S.posts.find(x=>x.id===id);if(!p)return;
+  if(p.date===date&&(time==null||p.time===time))return;
   if(p.status==='publie'){toast('Ce post est déjà publié');return}
-  await guard(async()=>{ok(await T('posts').update({date,updated_at:nowIso()}).eq('id',id));await loadTable('posts');toast(`« ${p.title||'Post'} » déplacé au ${fmtDay(date)}${p.time?'':' (pensez à l’heure)'}`)});
+  const upd={date,updated_at:nowIso()};if(time!=null)upd.time=time;
+  const tt=time!=null?time:p.time;
+  await guard(async()=>{ok(await T('posts').update(upd).eq('id',id));await loadTable('posts');
+    toast(`« ${p.title||'Post'} » : ${fmtDay(date)}${tt?' à '+tt:' (sans heure)'}${p.status==='programme'?' · reste programmé':''}`)});
 }
-document.addEventListener('dragstart',e=>{const el=e.target.closest?.('[draggable="true"][data-id]');if(el){e.dataTransfer.setData('text/plain',el.dataset.id);e.dataTransfer.effectAllowed='move'}});
+document.addEventListener('dragstart',e=>{const el=e.target.closest?.('[draggable="true"][data-id]');if(el){e.dataTransfer.setData('text/plain',el.dataset.id);e.dataTransfer.effectAllowed='move';setTimeout(()=>document.body.classList.add('dragging'),0)}});
+document.addEventListener('dragend',()=>{document.body.classList.remove('dragging');document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'))});
 document.addEventListener('dragover',e=>{const d=e.target.closest?.('[data-day]');if(d){e.preventDefault();d.classList.add('over')}});
 document.addEventListener('dragleave',e=>{const d=e.target.closest?.('[data-day]');if(d&&!d.contains(e.relatedTarget))d.classList.remove('over')});
-document.addEventListener('drop',e=>{const d=e.target.closest?.('[data-day]');if(!d)return;e.preventDefault();d.classList.remove('over');const id=e.dataTransfer.getData('text/plain');if(id)movePost(id,d.dataset.day)});
+document.addEventListener('drop',e=>{const d=e.target.closest?.('[data-day]');if(!d)return;e.preventDefault();d.classList.remove('over');document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'));const id=e.dataTransfer.getData('text/plain');if(id)movePost(id,d.dataset.day,d.dataset.time??null)});
 
 /* ---------- STUDIO ---------- */
 const SJ=[['a_revoir','À revoir'],['en_cours','En cours'],['valide','Validés'],['refuse','Refusés']];
@@ -980,7 +1043,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 
 /* ---------- editor ---------- */
 function openEditor(p,preset={}){
-  draft=p?JSON.parse(JSON.stringify(p)):{title:'',networks:preset.net?[preset.net]:['ig'],format:'Reel',date:preset.date||'',time:'',status:'brouillon',simple:false,captions:{},notes:'',validations:{},stats:{},...(preset.extra||{})};
+  draft=p?JSON.parse(JSON.stringify(p)):{title:'',networks:preset.net?[preset.net]:['ig'],format:'Reel',date:preset.date||'',time:preset.time||'',status:'brouillon',simple:false,captions:{},notes:'',validations:{},stats:{},...(preset.extra||{})};
   draft.send={...SENDDEF,...(draft.send||{})};draft.fit=draft.fit||{};draft.visuals=draft.visuals||[];
   confirmDel=false;renderEditor();$('#overlay').hidden=false;document.body.style.overflow='hidden';setTimeout(()=>$('#e-title')?.focus(),30);
 }
@@ -1273,7 +1336,7 @@ async function toggleValidate(id){
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{
   const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,id=b.dataset.id;
-  if(a==='new')openEditor(null,{date:b.dataset.date,net:b.dataset.net});
+  if(a==='new')openEditor(null,{date:b.dataset.date,time:b.dataset.time,net:b.dataset.net});
   else if(a==='open'){const p=S.posts.find(x=>x.id===id);if(p)openEditor(p)}
   else if(a==='close')closeEditor();
   else if(a==='save')savePost();
