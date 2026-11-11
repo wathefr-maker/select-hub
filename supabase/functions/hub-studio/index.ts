@@ -52,6 +52,56 @@ async function productImages(handle: string, fallback?: string | null, all = fal
   return fallback ? [fallback] : [];
 }
 
+/* ---------- collection du modèle (lien des épingles) ---------- */
+// Les épingles pointent vers la collection du modèle, pas vers la fiche produit :
+// une paire vendue est supprimée de la boutique, sa fiche passe en 404, la collection reste.
+const SKIP_COLLECTION = /tout voir|toutes nos|promotion|nouveaut|best|sneakers (beige|blanc|bleu|gris|imprim|l[ée]opard|marron|noir|rose|rouge|sport|vert|violet)|accessoires|collaborations|autres marques|running|basketball|football|slides|t-shirts|sweats|pulls|pantalons|shorts|vestes|maillots/i;
+const GENERIC_WORDS = new Set(["nike", "air", "adidas", "retro", "og"]);
+const words = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+let collectionsCache: { at: number; list: { handle: string; all: string[]; req: string[]; penalty: number }[] } | null = null;
+
+async function shopCollections() {
+  if (collectionsCache && Date.now() - collectionsCache.at < 30 * 60000) return collectionsCache.list;
+  const list: { handle: string; all: string[]; req: string[]; penalty: number }[] = [];
+  for (let page = 1; page <= 4; page++) {
+    const r = await fetch(`${SHOP}/collections.json?limit=250&page=${page}`, { headers: { Accept: "application/json" } });
+    if (!r.ok) break;
+    const cols: any[] = (await r.json()).collections || [];
+    for (const c of cols) {
+      if (!c.products_count || SKIP_COLLECTION.test(c.title || "") || c.handle === "ds-vetements") continue;
+      const all = words(c.title || "");
+      list.push({ handle: c.handle, all, req: all.filter((w) => !GENERIC_WORDS.has(w)), penalty: c.handle.startsWith("vetements") ? 5 : 0 });
+    }
+    if (cols.length < 250) break;
+  }
+  if (list.length) collectionsCache = { at: Date.now(), list };
+  return list;
+}
+
+/** Adresse de la collection la plus précise qui correspond au nom de la paire (ex. « Nike Air Jordan 4 Thunder » → Air Jordan 4). */
+async function collectionUrl(title: string): Promise<string> {
+  try {
+    const t = new Set(words(title));
+    let best = "", score = 0;
+    for (const c of await shopCollections()) {
+      const need = c.req.length ? c.req : c.all;
+      if (!need.every((w) => t.has(w))) continue;
+      const s = c.req.length * 10 + c.all.filter((w) => t.has(w)).length - c.penalty + 5;
+      if (s > score) { score = s; best = c.handle; }
+    }
+    return `${SHOP}/collections/${best || "sneakers"}`;
+  } catch {
+    return `${SHOP}/collections/sneakers`;
+  }
+}
+
+/** Lien des épingles d'un carrousel : la collection du modèle. */
+async function pinUrl(job: any): Promise<string> {
+  if (!job.pin_url) job.pin_url = await collectionUrl(job.product_title || "");
+  return job.pin_url;
+}
+
 // Photos choisies dans le hub : seulement des liens https venant de la boutique ou du stockage du hub
 function cleanRefs(list: unknown): string[] {
   if (!Array.isArray(list)) return [];
@@ -71,10 +121,11 @@ function template(job: any) {
   const t = job.product_title;
   const brand = (t.split(" ")[0] || "sneakers").toLowerCase().replace(/[^a-z0-9]/g, "");
   const price = job.product_price ? ` · ${Number(job.product_price).toFixed(2).replace(".", ",")} €` : "";
+  const link = job.pin_url || job.product_url;
   const pins = [
-    `${t} – idée de tenue sneakers\n${t}, à porter avec un jean brut ou un pantalon large. Disponible chez Select by Thibaud à Vichy et en ligne.\n${job.product_url}`,
-    `${t} en détail\nLes finitions de la ${t} de près : matières, coutures, semelle. Dispo en boutique à Vichy et sur le site.\n${job.product_url}`,
-    `Comment porter la ${t}\nUne idée simple pour assortir la ${t} au quotidien. Disponible chez Select by Thibaud, 2 rue de Paris à Vichy, et en ligne.\n${job.product_url}`,
+    `${t} – idée de tenue sneakers\n${t}, à porter avec un jean brut ou un pantalon large. Disponible chez Select by Thibaud à Vichy et en ligne.\n${link}`,
+    `${t} en détail\nLes finitions de la ${t} de près : matières, coutures, semelle. Dispo en boutique à Vichy et sur le site.\n${link}`,
+    `Comment porter la ${t}\nUne idée simple pour assortir la ${t} au quotidien. Disponible chez Select by Thibaud, 2 rue de Paris à Vichy, et en ligne.\n${link}`,
   ];
   return {
     tt: `${t} 👟\nDispo chez Select, 2 rue de Paris à Vichy, et sur le site${price}.\n#sneakers #${brand} #vichy #sneakershop #outfit`,
@@ -91,6 +142,7 @@ function pinList(c: any, job: any): string[] {
 }
 
 async function captions(job: any): Promise<{ tt: string; pin: string; pins: string[]; ai: boolean }> {
+  const link = await pinUrl(job);
   const base = template(job);
   if (!aiKey()) return { ...base, ai: false };
   try {
@@ -108,13 +160,13 @@ async function captions(job: any): Promise<{ tt: string; pin: string; pins: stri
           role: "user",
           content:
             `Paire : ${job.product_title}${job.product_price ? ` (${job.product_price} €)` : ""}.\n` +
-            `Style du carrousel : ${job.prompt_name}.\nFiche produit : ${job.product_url}\n\n` +
+            `Style du carrousel : ${job.prompt_name}.\nFiche produit : ${job.product_url}\nCollection du modèle (lien des épingles) : ${link}\n\n` +
             "tt = légende TikTok pour un carrousel photo : 1re ligne accrocheuse (elle sert de titre, 90 caractères max), " +
             "1 ou 2 phrases, mention « dispo en boutique à Vichy et sur le site », puis 4 hashtags pertinents. 300 caractères max.\n" +
             "pins = 3 descriptions Pinterest, une par photo du carrousel publiée comme épingle séparée " +
             "(1 : vue d'ensemble, 2 : détail, 3 : porté ou de profil). Chacune : 1re ligne = titre de l'épingle avec les mots que les gens cherchent " +
             "(marque, modèle, coloris, « tenue »), différent pour chaque épingle, puis 2 phrases riches en mots-clés, " +
-            "puis l'adresse de la fiche produit seule sur la dernière ligne. 480 caractères max chacune.",
+            "puis l'adresse de la collection du modèle seule sur la dernière ligne (jamais celle de la fiche produit). 480 caractères max chacune.",
         }],
       }),
     });
@@ -123,8 +175,8 @@ async function captions(job: any): Promise<{ tt: string; pin: string; pins: stri
     const text = (out.content || []).map((c: any) => c.text || "").join("");
     const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
     const pins = [0, 1, 2].map((i) => {
-      let p = String(j.pins?.[i] || base.pins[i]);
-      if (!p.includes(job.product_url)) p = `${p}\n${job.product_url}`;
+      let p = String(j.pins?.[i] || base.pins[i]).split(job.product_url).join(link);
+      if (!p.includes(link)) p = `${p}\n${link}`;
       return p;
     });
     return { tt: String(j.tt || base.tt), pin: pins[0], pins, ai: true };
@@ -251,7 +303,9 @@ function orderedImages(job: any, pr: any) {
 
 /** Crée (ou recrée s'ils ont été supprimés) le post TikTok et les épingles Pinterest d'un carrousel validé. */
 async function ensurePosts(job: any, pr: any, ordered: any[], caps: any, email: string): Promise<any> {
-  const pins = pinList(caps, job);
+  // Épingles : lien vers la collection du modèle (les textes générés avant ce changement contenaient la fiche produit)
+  const link = await pinUrl(job);
+  const pins = pinList(caps, job).map((p) => (p.includes(job.product_url) ? p.split(job.product_url).join(link) : p));
   caps.pins = pins;
   caps.pin = pins[0];
   const ids: any = { ...(job.post_ids || {}) };
@@ -267,7 +321,7 @@ async function ensurePosts(job: any, pr: any, ordered: any[], caps: any, email: 
   }
   // Photos en 9:16 : TikTok les reçoit telles quelles ; Pinterest les reçoit recadrées en 1000×1500 (2:3, sans bandes noires)
   const tall = (pr?.aspect || "") === "9:16";
-  const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`;
+  const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}\nLien des épingles : ${link}`;
   // TikTok : le carrousel complet
   if (!ids.tt) {
     ids.tt = crypto.randomUUID();
