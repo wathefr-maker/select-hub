@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
       caps.pin = pins[0];
       const ids: any = { ...(job.post_ids || {}) };
       const legacy = !!job.post_id && !ids.tt; // ancien carrousel : un seul post TikTok + Pinterest déjà créé
-      // Photos en 9:16 : TikTok les reçoit telles quelles, Pinterest aussi (épingle verticale 1080×1920, sans recadrage)
+      // Photos en 9:16 : TikTok les reçoit telles quelles ; Pinterest les reçoit recadrées en 1000×1500 (2:3, sans bandes noires)
       const tall = (pr?.aspect || "") === "9:16";
       const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`;
       // TikTok : le carrousel complet
@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
             id, title: `${job.product_title} · épingle ${i + 1}/${ordered.length}`, networks: ["pin"], format: "Épingle", status: "brouillon",
             captions: { pin: pins[i] || pins[0] }, notes: note,
             visuals: [{ path: im.path, name: `${job.product_title} ${i + 1}` }],
-            send: { pin: "direct" }, fit: { pin: "cover" }, ...(tall ? { sizes: { pin: [1080, 1920] } } : {}), created_by: email,
+            send: { pin: "direct" }, fit: { pin: "cover" }, created_by: email,
           };
         });
         const ins = await admin.from("hub_posts").insert(rows);
