@@ -58,7 +58,7 @@ async function productImages(handle: string, fallback?: string | null, all = fal
 const SKIP_COLLECTION = /tout voir|toutes nos|promotion|nouveaut|best|sneakers (beige|blanc|bleu|gris|imprim|l[ée]opard|marron|noir|rose|rouge|sport|vert|violet)|accessoires|collaborations|autres marques|running|basketball|football|slides|t-shirts|sweats|pulls|pantalons|shorts|vestes|maillots/i;
 const GENERIC_WORDS = new Set(["nike", "air", "adidas", "retro", "og"]);
 const words = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
 let collectionsCache: { at: number; list: { handle: string; all: string[]; req: string[]; penalty: number }[] } | null = null;
 
 async function shopCollections() {
