@@ -2,6 +2,7 @@
 //  - start   : crée un carrousel par paire × style choisis et lance la photo 1 chez Higgsfield
 //  - tick    : fait avancer les carrousels en cours (aussi lancé chaque minute par pg_cron)
 //  - approve : range les photos dans Google Drive, crée un post brouillon TikTok (carrousel) et 3 épingles Pinterest
+//  - toplan  : renvoie dans « À planifier » les brouillons d'un carrousel validé qui ont été supprimés
 //  - refs    : liste les photos de la fiche produit, pour choisir celles envoyées à Higgsfield
 //  - reject / retry / captions / status
 // La photo 1 sert de référence aux photos 2 et 3 pour garder le même décor et la même tenue.
@@ -246,6 +247,59 @@ function orderedImages(job: any, pr: any) {
   return order.map((n) => (job.images || []).find((i: any) => i.n === n)).filter(Boolean);
 }
 
+/* ---------- brouillons créés à la validation ---------- */
+
+/** Crée (ou recrée s'ils ont été supprimés) le post TikTok et les épingles Pinterest d'un carrousel validé. */
+async function ensurePosts(job: any, pr: any, ordered: any[], caps: any, email: string): Promise<any> {
+  const pins = pinList(caps, job);
+  caps.pins = pins;
+  caps.pin = pins[0];
+  const ids: any = { ...(job.post_ids || {}) };
+  const legacy = !!job.post_id && !ids.tt; // ancien carrousel : un seul post TikTok + Pinterest déjà créé
+  if (legacy) return ids;
+  // On oublie les brouillons supprimés depuis, pour les recréer
+  const known = [ids.tt, ...(Array.isArray(ids.pin) ? ids.pin : [])].filter(Boolean);
+  if (known.length) {
+    const { data } = await admin.from("hub_posts").select("id").in("id", known);
+    const alive = new Set((data || []).map((r: any) => r.id));
+    if (ids.tt && !alive.has(ids.tt)) delete ids.tt;
+    if (Array.isArray(ids.pin)) ids.pin = ids.pin.map((x: string) => (alive.has(x) ? x : null));
+  }
+  // Photos en 9:16 : TikTok les reçoit telles quelles ; Pinterest les reçoit recadrées en 1000×1500 (2:3, sans bandes noires)
+  const tall = (pr?.aspect || "") === "9:16";
+  const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`;
+  // TikTok : le carrousel complet
+  if (!ids.tt) {
+    ids.tt = crypto.randomUUID();
+    const ins = await admin.from("hub_posts").insert({
+      id: ids.tt, title: `${job.product_title} · ${job.prompt_name}`, networks: ["tt"], format: "Carrousel", status: "brouillon",
+      captions: { tt: caps.tt || "" }, notes: note,
+      visuals: ordered.map((im: any, i: number) => ({ path: im.path, name: `${job.product_title} ${i + 1}` })),
+      send: { tt: "brouillon" }, fit: { tt: tall ? "cover" : "contain" }, created_by: email,
+    });
+    if (ins.error) throw ins.error;
+  }
+  // Pinterest : une épingle par photo
+  const cur: (string | null)[] = Array.isArray(ids.pin) ? ids.pin : [];
+  const rows: any[] = [];
+  ids.pin = ordered.map((im: any, i: number) => {
+    if (cur[i]) return cur[i];
+    const id = crypto.randomUUID();
+    rows.push({
+      id, title: `${job.product_title} · épingle ${i + 1}/${ordered.length}`, networks: ["pin"], format: "Épingle", status: "brouillon",
+      captions: { pin: pins[i] || pins[0] }, notes: note,
+      visuals: [{ path: im.path, name: `${job.product_title} ${i + 1}` }],
+      send: { pin: "direct" }, fit: { pin: "cover" }, created_by: email,
+    });
+    return id;
+  });
+  if (rows.length) {
+    const ins = await admin.from("hub_posts").insert(rows);
+    if (ins.error) throw ins.error;
+  }
+  return ids;
+}
+
 /* ---------- serveur ---------- */
 
 Deno.serve(async (req) => {
@@ -327,6 +381,18 @@ Deno.serve(async (req) => {
       return json({ ok: true, captions: c });
     }
 
+    if (body.action === "toplan") {
+      if (job.status !== "valide") return json({ error: "Ce carrousel n'est pas validé." }, 400);
+      const { data: pr } = await admin.from("hub_prompts").select("*").eq("id", job.prompt_id).maybeSingle();
+      const caps = { ...(job.captions || {}) };
+      delete caps.ai;
+      const before = JSON.stringify(job.post_ids || {});
+      const ids = await ensurePosts(job, pr, orderedImages(job, pr), caps, email);
+      const made = before !== JSON.stringify(ids);
+      if (made) await admin.from("hub_studio").update({ post_id: ids.tt || job.post_id, post_ids: ids, updated_at: nowIso() }).eq("id", job.id);
+      return json({ ok: true, post_ids: ids, recreated: made });
+    }
+
     if (body.action === "approve") {
       if (!["a_revoir", "valide"].includes(job.status) || (job.images || []).length < 3) return json({ error: "Ce carrousel n'est pas prêt." }, 400);
       const { data: pr } = await admin.from("hub_prompts").select("*").eq("id", job.prompt_id).maybeSingle();
@@ -334,43 +400,7 @@ Deno.serve(async (req) => {
       const caps = { ...(job.captions || {}), ...(body.captions || {}) };
       delete caps.ai;
 
-      const pins = pinList(caps, job);
-      caps.pins = pins;
-      caps.pin = pins[0];
-      const ids: any = { ...(job.post_ids || {}) };
-      const legacy = !!job.post_id && !ids.tt; // ancien carrousel : un seul post TikTok + Pinterest déjà créé
-      // Photos en 9:16 : TikTok les reçoit telles quelles ; Pinterest les reçoit recadrées en 1000×1500 (2:3, sans bandes noires)
-      const tall = (pr?.aspect || "") === "9:16";
-      const note = `Généré dans le Studio (style ${job.prompt_name}).\nFiche produit : ${job.product_url}`;
-      // TikTok : le carrousel complet
-      if (!ids.tt && !legacy) {
-        ids.tt = crypto.randomUUID();
-        {
-          const ins = await admin.from("hub_posts").insert({
-            id: ids.tt, title: `${job.product_title} · ${job.prompt_name}`, networks: ["tt"], format: "Carrousel", status: "brouillon",
-            captions: { tt: caps.tt || "" }, notes: note,
-            visuals: ordered.map((im: any, i: number) => ({ path: im.path, name: `${job.product_title} ${i + 1}` })),
-            send: { tt: "brouillon" }, fit: { tt: tall ? "cover" : "contain" }, created_by: email,
-          });
-          if (ins.error) throw ins.error;
-        }
-      }
-      // Pinterest : une épingle par photo
-      if (!legacy && (!Array.isArray(ids.pin) || ids.pin.length < ordered.length)) {
-        ids.pin = [];
-        const rows = ordered.map((im: any, i: number) => {
-          const id = crypto.randomUUID();
-          ids.pin.push(id);
-          return {
-            id, title: `${job.product_title} · épingle ${i + 1}/${ordered.length}`, networks: ["pin"], format: "Épingle", status: "brouillon",
-            captions: { pin: pins[i] || pins[0] }, notes: note,
-            visuals: [{ path: im.path, name: `${job.product_title} ${i + 1}` }],
-            send: { pin: "direct" }, fit: { pin: "cover" }, created_by: email,
-          };
-        });
-        const ins = await admin.from("hub_posts").insert(rows);
-        if (ins.error) throw ins.error;
-      }
+      const ids = await ensurePosts(job, pr, ordered, caps, email);
       const postId = ids.tt || job.post_id;
       const drive = job.drive?.done && !body.drive_again ? job.drive : await toDrive(job, ordered);
       await admin.from("hub_studio").update({ status: "valide", post_id: postId, post_ids: ids, captions: caps, drive, updated_at: nowIso() }).eq("id", job.id);

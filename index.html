@@ -327,7 +327,11 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .refadd{width:72px;height:72px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);cursor:pointer;text-align:center}
 .refadd:hover{border-color:var(--accent);color:var(--ink)}
 .refrow .hint{margin:8px 0 0;font-size:12px}
-.unpl .tile.hl{outline:2px solid var(--accent);outline-offset:-2px;background:rgba(228,106,51,.10)}
+.unpl .tilew{display:flex;align-items:center;gap:6px;border-top:1px solid #24231F;min-width:0;max-width:100%}.unpl .tilew .tile{border-top:0;flex:1 1 0;min-width:0;width:auto}
+.unpl .tilew.hl{outline:2px solid var(--accent);outline-offset:-2px;background:rgba(228,106,51,.10);border-radius:8px}
+.tdel{flex:none;min-width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);font-size:17px;cursor:pointer;padding:0 6px}
+.tdel:hover{border-color:var(--line);color:var(--ink)}
+.tdel.ask{background:#C2413A;color:#fff;font-size:12px;font-weight:600;border-color:#C2413A}
 .stban{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:10px;background:var(--sunk);border:1px solid var(--line);margin:4px 0 6px}
 .stban b{font-size:14px}.stban span{font-size:12.5px;color:var(--muted)}
 .stban.ok{border-color:rgba(123,198,126,.45);background:rgba(123,198,126,.08)}.stban.ok b{color:#7BC67E}
@@ -494,7 +498,7 @@ let musicPick=null; const SOUNDS={}; let player=null;
 let sb=null,me={id:null,name:''},canWrite=true,recovery=false,installEvt=null;
 const BUCKET='hub-visuels';
 S.members=[];
-let HL=new Set(),NF='all',calView='semaine',wk=0,mediaFilt='tout',mediaSel=new Set();
+let delAsk=null,delT,HL=new Set(),NF='all',calView='semaine',wk=0,mediaFilt='tout',mediaSel=new Set();
 let route=routeFromHash();
 const now=new Date(); const calHome=()=>{const s=monday(new Date());s.setDate(s.getDate()+6);return new Date(s.getFullYear(),s.getMonth(),1)}; let cal=calHome();
 let draft=null, confirmDel=false;
@@ -779,7 +783,7 @@ function weekCard(){
 function unplannedCard(){
   const ps=sortPosts(S.posts.filter(p=>!p.date&&p.status!=='publie'&&inNF(p)));
   return `<aside class="card unpl"><div class="sechead"><h2>À planifier</h2><small>${ps.length}</small></div><p class="hint" style="margin:0 0 10px">Glissez une carte sur un jour pour lui donner une date.</p>
-   <div class="list">${ps.length?ps.map(p=>`<button class="tile${HL.has(p.id)?' hl':''}" draggable="true" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${dots(p.networks)} ${esc(STL[p.status])}</span></span></button>`).join(''):'<p class="empty">Tout a une date. Les carrousels validés dans le Studio arrivent ici.</p>'}</div></aside>`;
+   <div class="list">${ps.length?ps.map(p=>`<div class="tilew${HL.has(p.id)?' hl':''}"><button class="tile" draggable="true" data-a="open" data-id="${p.id}">${thumbOf(p)}<span class="t"><b>${esc(p.title||'Sans titre')}</b><span>${dots(p.networks)} ${esc(STL[p.status])}</span></span></button><button class="tdel${delAsk===p.id?' ask':''}" data-a="qdel" data-id="${p.id}" aria-label="Supprimer ${esc(p.title||'ce post')}" title="${delAsk===p.id?'Cliquer encore pour supprimer':'Supprimer'}">${delAsk===p.id?'Supprimer ?':'×'}</button></div>`).join(''):'<p class="empty">Tout a une date. Les carrousels validés dans le Studio arrivent ici.</p>'}</div></aside>`;
 }
 function viewPlanning(){
   const m=monday(new Date());m.setDate(m.getDate()+7*wk);
@@ -1296,7 +1300,10 @@ document.addEventListener('click',async e=>{
   else if(a==='delmember')guard(async()=>{ok(await T('members').delete().eq('email',id));await loadTable('members');toast('Accès retiré')});
   else if(a==='signout'){await sb.auth.signOut();location.hash='';location.reload()}
   else if(a==='stsel'){const n=+id;if(SD.sel.has(n))SD.sel.delete(n);else{const p=(SD.results||[]).find(x=>x.id===n);if(p){SD.sel.set(n,p);loadRefs(n)}}if(!SD.sel.has(n))SD.refs.delete(n);render(true)}
-  else if(a==='toplan'){const j=S.studio.find(x=>x.id===id);HL=new Set([j?.post_ids?.tt||j?.post_id,...(j?.post_ids?.pin||[])].filter(Boolean));NF='all';calView='semaine';location.hash='planning';setTimeout(()=>{document.querySelector('.unpl .tile.hl')?.scrollIntoView({block:'center',behavior:'smooth'})},120);setTimeout(()=>{HL=new Set();if(route==='planning')render(true)},6000)}
+  else if(a==='qdel'){clearTimeout(delT);if(delAsk!==id){delAsk=id;render(true);delT=setTimeout(()=>{delAsk=null;if(route==='planning')render(true)},4000);return}
+    delAsk=null;await guard(async()=>{ok(await T('posts').delete().eq('id',id));await loadTable('posts');toast('Post supprimé')})}
+  else if(a==='toplan'){const d=await studioCall({action:'toplan',id},b);if(!d)return;await loadTable('posts');if(d.recreated)toast('Brouillons renvoyés dans « À planifier »');
+    const j=S.studio.find(x=>x.id===id);const ids=d.post_ids||j?.post_ids||{};HL=new Set([ids.tt||j?.post_id,...(ids.pin||[])].filter(Boolean));NF='all';calView='semaine';location.hash='planning';setTimeout(()=>{document.querySelector('.unpl .tilew.hl')?.scrollIntoView({block:'center',behavior:'smooth'})},120);setTimeout(()=>{HL=new Set();if(route==='planning')render(true)},6000)}
   else if(a==='stunsel'){SD.sel.delete(+id);SD.refs.delete(+id);render(true)}
   else if(a==='stref'){const r=SD.refs.get(+id);if(r){const u=r.all[+b.dataset.u];if(r.on.includes(u))r.on=r.on.filter(x=>x!==u);else if(r.on.length<REFMAX)r.on.push(u);else toast(`${REFMAX} photos maximum par paire`);render(true)}}
   else if(a==='stgo')studioGo(b);
