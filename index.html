@@ -325,6 +325,7 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .refimg .ck{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
 .refimg[aria-pressed="false"] .ck{background:rgba(0,0,0,.35)}
 .refadd{width:72px;height:72px;border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);cursor:pointer;text-align:center}
+button.refadd{background:none;font:inherit;font-size:12px}button.refadd[aria-pressed="true"]{border-color:var(--accent);color:var(--ink)}
 .refadd:hover{border-color:var(--accent);color:var(--ink)}
 .refrow .hint{margin:8px 0 0;font-size:12px}
 .unpl .tilew{display:flex;align-items:center;gap:6px;border-top:1px solid #24231F;min-width:0;max-width:100%}.unpl .tilew .tile{border-top:0;flex:1 1 0;min-width:0;width:auto}
@@ -374,6 +375,14 @@ details.adv .advin{display:grid;gap:12px;padding-bottom:14px}
 .vsb img{width:100%;height:100%;object-fit:contain}
 .vslot.miss .vsb{border-style:dashed;border-color:#E9B949;background:var(--sunk);color:#E9B949;font-weight:600}
 .vslot[aria-current="true"] .vsb{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+.vph{display:grid;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px}
+.vphh{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}.vphh b{font-size:12.5px}.vphh .hint{font-size:11.5px}
+.vpi{position:relative;width:64px;display:grid;gap:2px;font-size:10.5px;color:var(--muted);text-align:center}
+.vpi img{width:64px;height:64px;object-fit:contain;background:#fff;border-radius:8px}
+.vpi i{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vpx{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#c0392b;color:#fff;cursor:pointer;line-height:1}
+.vsx{position:relative}.vsx em{position:absolute;bottom:4px;right:6px;background:var(--accent);color:#fff;font-style:normal;font-size:11px;border-radius:10px;padding:0 6px}
+.vsx span{font-size:26px;color:var(--muted)}
 .vtiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .vtile{display:grid;gap:4px;align-content:start;font-size:11.5px;min-width:0}
 .vtile b{font-weight:600;font-size:11.5px;overflow-wrap:anywhere}
@@ -1059,7 +1068,8 @@ async function studioApprove(id,btn){
 /* ---------- STUDIO · VIDÉOS IA ---------- */
 const VPH={profil:'Profil',dessus:'Dessus',talon:'Talon',semelle:'Semelle (dessous)',boite:'Boîte fermée'};
 const VJL={images:'Images en cours',images_a_revoir:'Images à valider',clips:'Vidéo en cours',montage:'Montage',a_revoir:'À revoir',valide:'Validée',refuse:'Refusée',erreur:'Erreur'};
-const VD={p:null,shop:null,photos:{},slot:'profil',hands:'homme',busy:false,up:null,poll:null,cut:new Set(),old:false};
+const VXMAX=6;const vdAll=()=>Object.values(VD.photos).flat();
+const VD={pick:null,jup:null,shopCache:{},p:null,shop:null,photos:{},slot:'profil',hands:'homme',busy:false,up:null,poll:null,cut:new Set(),old:false};
 const vtpl=id=>S.vtemplates.find(t=>t.id===(id||'unboxing'))||S.vtemplates[0];
 function viewVideo(){
   const t=vtpl(),k=S.studioKeys,ready=k?.hf;
@@ -1072,9 +1082,12 @@ function viewVideo(){
     <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les photos de la paire</h2><small>${req.length-miss.length}/${req.length}</small></div>
      ${VD.p?`<p class="hint" style="margin:0 0 10px">Cliquez sur une case, puis sur une photo de la fiche ou « Ajouter » pour la remplir. Plus les photos sont nettes, plus la paire sera fidèle.</p>
       <div class="vslots">${req.map(x=>{const u=VD.photos[x];return `<div class="vslot ${u?'':'miss'}" aria-current="${VD.slot===x}"><button class="vsb" data-a="vdslot" data-v="${x}">${u?`<img src="${esc(u)}" alt="">`:'<span>À ajouter</span>'}</button><b>${VPH[x]||x}</b>
-        <span class="vsa"><label class="linkish">${VD.up===x?'Envoi…':'Ajouter'}<input type="file" accept="image/*" data-vdup="${x}" hidden></label>${u?` · <button class="linkish" data-a="vdclr" data-v="${x}">Retirer</button>`:''}</span></div>`}).join('')}</div>
-      <div class="sechead" style="margin-top:12px"><small>Photos de la fiche · elles vont dans la case « ${VPH[VD.slot]||VD.slot} »</small></div>
-      <div class="refimgs">${VD.shop===null?'<span class="hint">Chargement…</span>':VD.shop.map((u,i)=>`<button class="refimg" data-a="vdpick" data-u="${i}" aria-pressed="${Object.values(VD.photos).includes(u)}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"><span class="ck" aria-hidden="true">${Object.values(VD.photos).includes(u)?'✓':''}</span></button>`).join('')}</div>`
+        <span class="vsa"><label class="linkish">${VD.up===x?'Envoi…':'Ajouter'}<input type="file" accept="image/*" data-vdup="${x}" hidden></label>${u?` · <button class="linkish" data-a="vdclr" data-v="${x}">Retirer</button>`:''}</span></div>`}).join('')}
+       ${(()=>{const ex=VD.photos.extra||[];return `<div class="vslot" aria-current="${VD.slot==='extra'}"><button class="vsb vsx" data-a="vdslot" data-v="extra">${ex.length?`<img src="${esc(ex[ex.length-1])}" alt=""><em>${ex.length}</em>`:'<span>+</span>'}</button><b>En plus</b>
+        <span class="vsa">${ex.length<VXMAX?`<label class="linkish">${VD.up==='extra'?'Envoi…':'Ajouter'}<input type="file" accept="image/*" multiple data-vdup="extra" hidden></label>`:''}${ex.length?` · <button class="linkish" data-a="vdclr" data-v="extra">Vider</button>`:''}</span></div>`})()}</div>
+      <p class="hint" style="margin:8px 0 0">« En plus » (facultatif) : jusqu’à ${VXMAX} autres photos de la paire (logo, intérieur, autre angle) envoyées avec chaque plan pour que l’IA la reproduise mieux.</p>
+      <div class="sechead" style="margin-top:12px"><small>Photos de la fiche · elles vont dans la case « ${VD.slot==='extra'?'En plus':VPH[VD.slot]||VD.slot} »</small></div>
+      <div class="refimgs">${VD.shop===null?'<span class="hint">Chargement…</span>':VD.shop.map((u,i)=>`<button class="refimg" data-a="vdpick" data-u="${i}" aria-pressed="${vdAll().includes(u)}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"><span class="ck" aria-hidden="true">${vdAll().includes(u)?'✓':''}</span></button>`).join('')}</div>`
      :'<p class="empty">Choisissez d’abord une paire.</p>'}</section>
      <section class="card"><div class="sechead"><h2><span class="stepn">3</span>Les mains</h2></div>
       <div class="styles"><label class="style"><input type="radio" name="vdhands" value="homme" ${VD.hands==='homme'?'checked':''}><div><b>Homme</b><span>Ongles courts, sweat gris, sans bijou</span></div></label>
@@ -1117,7 +1130,7 @@ function videoCard(j){
      <div class="acts"><button class="btn primary" data-a="vdplan" data-id="${j.id}">${post?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button></div>`}
   else if(st==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="vdretry" data-id="${j.id}">Relancer ce qui a échoué</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
   return `<article class="job vjob"><header><div><b>${esc(j.product_title)}</b><div class="m">${esc(t?.name||'Vidéo')} · ${j.hands==='femme'?'main de femme':'main d’homme'} · ${ago(j.created_at)}</div></div><span class="pill ${st==='images_a_revoir'?'a_revoir':st}">${esc(VJL[st]||st)}</span></header>
-   <div class="vtiles">${tiles}</div>${body}</article>`;
+   <div class="vtiles">${tiles}</div>${canFrame?photosStrip(j):''}${body}</article>`;
 }
 async function vdPickProduct(p){
   VD.p=p;VD.shop=null;VD.photos={};VD.slot='profil';render(true);
@@ -1131,15 +1144,34 @@ async function vdPickProduct(p){
   VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||'profil';
   render(true);
 }
-async function vdUpload(key,f){
+async function upRef(f){const ext=(f.type.split('/')[1]||'jpg').replace('jpeg','jpg');const path=`refs/${crypto.randomUUID()}.${ext}`;
+  const u=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type,cacheControl:'31536000'});if(u.error)throw u.error;return surl(path)}
+async function vdUpload(key,files){
   VD.up=key;render(true);
-  try{const ext=(f.type.split('/')[1]||'jpg').replace('jpeg','jpg');const path=`refs/${crypto.randomUUID()}.${ext}`;
-    const u=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type,cacheControl:'31536000'});if(u.error)throw u.error;
-    VD.photos[key]=surl(path);VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||key}
+  try{for(const f of files){const url=await upRef(f);
+    if(key==='extra'){const ex=VD.photos.extra||[];if(ex.length>=VXMAX){toast(`${VXMAX} photos en plus maximum`);break}VD.photos.extra=[...ex,url]}
+    else{VD.photos[key]=url;VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||key;break}}}
   catch(e){toast('Envoi de la photo impossible');console.warn(e)}
   VD.up=null;render(true);
 }
-document.addEventListener('change',e=>{const k=e.target.dataset?.vdup;if(k&&e.target.files?.[0])vdUpload(k,e.target.files[0]);if(e.target.name==='vdhands')VD.hands=e.target.value});
+/* Photos en plus sur une vidéo déjà lancée (avant les clips) */
+async function vjExtra(j,extra,okMsg){const d=await videoCall({action:'set_photos',id:j.id,photos:{extra}},null,okMsg);return d}
+async function vjUpload(id,files){const j=S.videos.find(x=>x.id===id);if(!j)return;VD.jup=id;render(true);
+  const ex=[...(j.photos?.extra||[])];
+  try{for(const f of files){if(ex.length>=VXMAX){toast(`${VXMAX} photos en plus maximum`);break}ex.push(await upRef(f))}}catch(e){toast('Envoi de la photo impossible');console.warn(e)}
+  await vjExtra(j,ex,'Photo ajoutée : cliquez « Refaire » sur les plans à corriger');VD.jup=null;render(true)}
+async function vjShop(pid){if(VD.shopCache[pid])return;VD.shopCache[pid]=[];render(true);
+  try{const r=await sb.functions.invoke('hub-video',{body:{action:'photos',product_id:pid}});VD.shopCache[pid]=r.data?.images||[]}catch(e){}render(true)}
+function photosStrip(j){
+  const P=j.photos||{},ex=P.extra||[],req=vtpl(j.template_id)?.required_photos||[];
+  const shop=VD.shopCache[j.product_id],used=[...req.map(k=>P[k]),...ex];
+  return `<div class="vph"><div class="vphh"><b>Photos envoyées à l’IA</b><span class="hint">Paire pas fidèle ? Ajoutez des photos, puis « Refaire » sur les plans à corriger.</span></div>
+   <div class="refimgs">${req.filter(k=>P[k]).map(k=>`<span class="vpi"><img src="${esc(P[k])}" alt="${esc(VPH[k]||k)}" loading="lazy"><i>${esc(VPH[k]||k)}</i></span>`).join('')}
+    ${ex.map((u,i)=>`<span class="vpi"><img src="${esc(u)}" alt="Photo en plus ${i+1}" loading="lazy"><button class="vpx" data-a="vjxdel" data-id="${j.id}" data-u="${i}" aria-label="Retirer cette photo">×</button><i>En plus</i></span>`).join('')}
+    ${ex.length<VXMAX?`<label class="refadd">${VD.jup===j.id?'Envoi…':'+ Ajouter'}<input type="file" accept="image/*" multiple data-vjup="${j.id}" hidden></label><button class="refadd" data-a="vjfiche" data-id="${j.id}" aria-pressed="${VD.pick===j.id}">Depuis la fiche</button>`:''}</div>
+   ${VD.pick===j.id?`<div class="refimgs">${!shop||!shop.length?'<span class="hint">Chargement des photos de la fiche…</span>':shop.map((u,i)=>`<button class="refimg" data-a="vjadd" data-id="${j.id}" data-u="${i}" aria-pressed="${used.includes(u)}" ${used.includes(u)?'disabled':''}><img src="${esc(u)}" alt="Photo ${i+1} de la fiche" loading="lazy"><span class="ck" aria-hidden="true">${used.includes(u)?'✓':'+'}</span></button>`).join('')}</div>`:''}</div>`;
+}
+document.addEventListener('change',e=>{const jv=e.target.dataset?.vjup;if(jv&&e.target.files?.length)vjUpload(jv,[...e.target.files]);const k=e.target.dataset?.vdup;if(k&&e.target.files?.length)vdUpload(k,[...e.target.files]);if(e.target.name==='vdhands')VD.hands=e.target.value});
 async function videoCall(body,btn,okMsg){
   if(btn)btn.disabled=true;
   try{const r=await sb.functions.invoke('hub-video',{body});if(r.error){let m=r.error.message;try{m=(await r.error.context.json()).error||m}catch(_){}toast(m);return null}
@@ -1548,7 +1580,11 @@ document.addEventListener('click',async e=>{
   else if(a==='stmode'){SD.mode=b.dataset.v;render(true);if(SD.mode==='video')videoPoll()}
   else if(a==='vdsel'){const n=+id;if(VD.p?.id===n){VD.p=null;VD.shop=null;VD.photos={};render(true)}else{const p=(SD.results||[]).find(x=>x.id===n);if(p)vdPickProduct(p)}}
   else if(a==='vdslot'){VD.slot=b.dataset.v;render(true)}
-  else if(a==='vdpick'){const u=VD.shop?.[+b.dataset.u];if(u){for(const k in VD.photos)if(VD.photos[k]===u&&k!==VD.slot)delete VD.photos[k];VD.photos[VD.slot]=u;VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||VD.slot;render(true)}}
+  else if(a==='vdpick'&&VD.slot==='extra'){const u=VD.shop?.[+b.dataset.u];if(u){const ex=VD.photos.extra||[];if(ex.includes(u))VD.photos.extra=ex.filter(x=>x!==u);else if(ex.length<VXMAX)VD.photos.extra=[...ex,u];else toast(`${VXMAX} photos en plus maximum`);render(true)}}
+  else if(a==='vjfiche'){const j=S.videos.find(x=>x.id===id);VD.pick=VD.pick===id?null:id;render(true);if(j&&VD.pick)vjShop(j.product_id)}
+  else if(a==='vjadd'){const j=S.videos.find(x=>x.id===id);const u=VD.shopCache[j?.product_id]?.[+b.dataset.u];if(j&&u){const ex=[...(j.photos?.extra||[])];if(ex.length>=VXMAX){toast(`${VXMAX} photos en plus maximum`);return}b.disabled=true;await vjExtra(j,[...ex,u],'Photo ajoutée : cliquez « Refaire » sur les plans à corriger')}}
+  else if(a==='vjxdel'){const j=S.videos.find(x=>x.id===id);if(j){b.disabled=true;await vjExtra(j,(j.photos?.extra||[]).filter((_,i)=>i!==+b.dataset.u),'Photo retirée')}}
+  else if(a==='vdpick'){const u=VD.shop?.[+b.dataset.u];if(u){for(const k in VD.photos)if(k!=='extra'&&VD.photos[k]===u&&k!==VD.slot)delete VD.photos[k];VD.photos[VD.slot]=u;VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||VD.slot;render(true)}}
   else if(a==='vdclr'){delete VD.photos[b.dataset.v];VD.slot=b.dataset.v;render(true)}
   else if(a==='vdgo')videoGo();
   else if(a==='vdold'){VD.old=!VD.old;render(true)}

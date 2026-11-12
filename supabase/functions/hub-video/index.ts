@@ -104,15 +104,20 @@ function refsFor(plan: any, job: any, tpl: any): string[] {
     else if (r.startsWith("frame:")) {
       const f = job.frames?.[r.slice(6)];
       if (f?.path) out.push(publicUrl(f.path));
-    } else if (job.photos?.[r]) out.push(job.photos[r]);
+    } else if (typeof job.photos?.[r] === "string") out.push(job.photos[r]);
   }
-  return [...new Set(out)];
+  // Photos en plus, ajoutées pour aider l'IA à reconnaître la paire : envoyées avec chaque plan
+  for (const u of Array.isArray(job.photos?.extra) ? job.photos.extra : []) out.push(u);
+  return [...new Set(out)].slice(0, 12);
 }
 
 function imagePrompt(plan: any, job: any): string {
   const hands = (HANDS[job.hands] || HANDS.homme)(mainColor(job.product_title));
   return String(plan.image_prompt).replaceAll("{HANDS}", hands);
 }
+
+const MAX_EXTRA = 6;
+const cleanExtra = (l: unknown) => [...new Set((Array.isArray(l) ? l : []).filter(okUrl))].slice(0, MAX_EXTRA);
 
 const late = (x: any) => x?.at && Date.now() - new Date(x.at).getTime() > TIMEOUT_MIN * 60000;
 
@@ -271,6 +276,8 @@ Deno.serve(async (req) => {
         if (!okUrl(url)) return json({ error: `Photo « ${k} » manquante.` }, 400);
         photos[k] = url;
       }
+      const extra = cleanExtra(body.photos?.extra);
+      if (extra.length) (photos as any).extra = extra;
       const ins = await admin.from("hub_video_jobs").insert({
         template_id: tpl.id, product_id: p.id, product_title: p.title, product_handle: p.handle,
         product_url: `${SHOP}/products/${p.handle}`, product_price: p.min_price,
@@ -301,6 +308,16 @@ Deno.serve(async (req) => {
       await admin.from("hub_video_jobs").update({ frames, status: "images", error: null, lock_at: null, updated_at: nowIso() }).eq("id", job.id);
       await tick([job.id]);
       return json({ ok: true });
+    }
+
+    // Changer les photos envoyées (cases ou photos en plus) avant les clips ; les plans à corriger se refont ensuite
+    if (body.action === "set_photos") {
+      if (Object.keys(job.clips || {}).length) return json({ error: "Les clips sont déjà lancés : les photos ne servent plus." }, 400);
+      const photos: Record<string, unknown> = { ...(job.photos || {}) };
+      for (const k of tpl?.required_photos || []) if (okUrl(body.photos?.[k])) photos[k] = body.photos[k];
+      if (body.photos && "extra" in body.photos) photos.extra = cleanExtra(body.photos.extra);
+      await admin.from("hub_video_jobs").update({ photos, updated_at: nowIso() }).eq("id", job.id);
+      return json({ ok: true, photos });
     }
 
     if (body.action === "launch") {
