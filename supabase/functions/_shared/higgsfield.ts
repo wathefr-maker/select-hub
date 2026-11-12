@@ -57,13 +57,27 @@ export async function submitImage(p: { prompt: string; images: string[]; aspect:
   return id;
 }
 
-/** État d'une demande : pending, done (avec l'adresse de l'image) ou error. */
+/** Lance une vidéo à partir d'une image (Seedance par défaut). Renvoie l'identifiant de la demande. */
+export async function submitVideo(p: { model: string; image: string; prompt: string; duration: number; resolution: string; aspect: string; idem: string }): Promise<string> {
+  const r = await call("POST", `${HF}/${p.model.replace(/^\/+/, "")}`, {
+    image_url: p.image,
+    prompt: p.prompt,
+    duration: p.duration,
+    resolution: p.resolution,
+    aspect_ratio: p.aspect,
+  }, p.idem);
+  const id = r?.request_id || r?.id;
+  if (!id) throw new HfError("Higgsfield n'a pas renvoyé d'identifiant de demande.");
+  return id;
+}
+
+/** État d'une demande : pending, done (avec l'adresse de l'image ou de la vidéo) ou error. */
 export async function status(id: string): Promise<{ state: "pending" | "done" | "error"; url?: string; error?: string }> {
   const r = await call("GET", `${HF}/requests/${id}/status`);
   const s = String(r?.status || "").toLowerCase();
   if (s === "completed") {
-    const url = r?.images?.[0]?.url || r?.image?.url || r?.output?.[0]?.url;
-    return url ? { state: "done", url } : { state: "error", error: "Image terminée mais introuvable." };
+    const url = r?.images?.[0]?.url || r?.image?.url || r?.video?.url || r?.videos?.[0]?.url || r?.output?.[0]?.url;
+    return url ? { state: "done", url } : { state: "error", error: "Résultat terminé mais introuvable." };
   }
   if (s === "nsfw") return { state: "error", error: "Image refusée par la modération Higgsfield." };
   if (s === "failed" || s === "canceled") {

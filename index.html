@@ -364,6 +364,27 @@ details.adv .advin{display:grid;gap:12px;padding-bottom:14px}
 .setup .ok{color:var(--s-valide)} .setup .no{color:var(--s-valider)}
 .filt{display:flex;gap:6px;flex-wrap:wrap}
 .jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.seg.big button{padding:7px 14px;font-size:13px}
+.pagehead .seg{align-self:flex-start}
+.vslots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
+.vslot{display:grid;gap:4px;justify-items:center;text-align:center;font-size:12px}
+.vslot b{font-size:12px;font-weight:600}
+.vslot .vsa{font-size:11.5px;color:var(--muted)}
+.vsb{width:100%;aspect-ratio:1;border-radius:10px;border:2px solid var(--line);background:#fff;padding:0;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.vsb img{width:100%;height:100%;object-fit:contain}
+.vslot.miss .vsb{border-style:dashed;border-color:#E9B949;background:var(--sunk);color:#E9B949;font-weight:600}
+.vslot[aria-current="true"] .vsb{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+.vtiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.vtile{display:grid;gap:4px;align-content:start;font-size:11.5px;min-width:0}
+.vtile b{font-weight:600;font-size:11.5px;overflow-wrap:anywhere}
+.vtile .btn{justify-self:start;padding:3px 8px;font-size:11px}
+.vtile .shot video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.vtile .shot a{position:absolute;inset:0}
+.vov{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);color:#fff;font-size:10.5px;padding:4px}
+.vov.err,.verr{color:#ff8a80}
+.vfinal{width:100%;max-width:260px;aspect-ratio:9/16;background:#000;border-radius:8px;justify-self:center}
+.vjob{grid-column:1/-1}
+@media(max-width:700px){.vtiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .job{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:12px;display:grid;gap:10px;min-width:0}
 .job header{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .job header b{font-size:13.5px;overflow-wrap:anywhere}
@@ -524,7 +545,7 @@ const REPERES={
  tt:[['Vidéo et photos','Vertical 9:16 (1080×1920). Un carrousel devient un post photo qui défile, jusqu’à 35 images.'],['Son','Choisissez un son tendance dans le hub (publication directe), ou ajoutez-le dans l’appli si le post part en brouillon.'],['Légende','Courte, 3 à 5 hashtags. Le texte à l’écran compte plus que la légende.'],['Rythme','Changer de plan toutes les 2 à 3 secondes.']],
  pin:[['Format','Vertical 2:3 (1000×1500). Une image propre, peu de texte.'],['Titre','Les mots que les gens cherchent : « sneakers New Balance 2002R tenue ».'],['Lien','Chaque épingle renvoie vers la fiche produit du site.'],['Tableaux','Un tableau par marque, univers ou saison.']]};
 
-const S={studio:[],prompts:[],studioKeys:null,posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],settings:[],fbPages:null,pfKey:null,pinBoards:null,status:'loading'};
+const S={studio:[],prompts:[],videos:[],vtemplates:[],studioKeys:null,posts:[],ideas:[],messages:[],kpis:{},recaps:[],members:[],connections:[],settings:[],fbPages:null,pfKey:null,pinBoards:null,status:'loading'};
 let musicPick=null; const SOUNDS={}; let player=null;
 let sb=null,me={id:null,name:''},canWrite=true,recovery=false,installEvt=null;
 const BUCKET='hub-visuels';
@@ -903,11 +924,15 @@ const surl=path=>sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 const eur=n=>n==null?'':Number(n).toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
 async function studioStatus(){try{const r=await sb.functions.invoke('hub-studio',{body:{action:'status'}});if(!r.error){S.studioKeys=r.data;if(route==='studio')render()}}catch(e){}}
 
+function studioSeg(){return `<div class="seg big" role="group" aria-label="Type de création"><button data-a="stmode" data-v="photo" aria-pressed="${SD.mode!=='video'}">Carrousels photo</button><button data-a="stmode" data-v="video" aria-pressed="${SD.mode==='video'}">Vidéos IA</button></div>`}
 function viewStudio(){
+  setTimeout(vdAuto,0);
+  if(SD.mode==='video')return `<div class="pagehead"><div><div class="eyebrow">Studio vidéos</div><h1>Créer une vidéo unboxing</h1><p>Tout en IA : d’abord les images des plans, que vous validez, puis la vidéo verticale accélérée, sans texte, prête pour TikTok.</p></div>${studioSeg()}</div>`
+    +(S.studioKeys&&!S.studioKeys.hf?`<div class="banner">La génération n’est pas encore branchée : il manque la clé Higgsfield API dans Supabase.</div>`:'')+viewVideo();
   const k=S.studioKeys,ready=k?.hf;
   const n=SD.sel.size*SD.styles.size;
   const prompts=S.prompts.filter(p=>p.active);
-  return `<div class="pagehead"><div><div class="eyebrow">Studio visuels</div><h1>Créer des carrousels</h1><p>Choisissez des paires, un ou plusieurs styles validés : 3 photos par carrousel, prêtes pour TikTok et Pinterest.</p></div></div>`
+  return `<div class="pagehead"><div><div class="eyebrow">Studio visuels</div><h1>Créer des carrousels</h1><p>Choisissez des paires, un ou plusieurs styles validés : 3 photos par carrousel, prêtes pour TikTok et Pinterest.</p></div>${studioSeg()}</div>`
    +(k&&!ready?`<div class="banner">La génération n’est pas encore branchée : il manque la clé Higgsfield API dans Supabase. Vous pouvez déjà préparer votre sélection.</div>`:'')
    +`<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>Les paires</h2><small>${SD.sel.size} choisie${SD.sel.size>1?'s':''}</small></div>
      <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
@@ -968,7 +993,8 @@ async function searchProducts(){
 function prodGrid(){
   if(SD.results===null){setTimeout(searchProducts,0);return '<p class="empty">Chargement du catalogue…</p>'}
   if(!SD.results.length)return `<p class="empty">Aucune paire ${SD.stock?'en stock ':''}ne correspond.</p>`;
-  return `<div class="prods">${SD.results.map(p=>{const on=SD.sel.has(p.id);return `<button class="prod" data-a="stsel" data-id="${p.id}" aria-pressed="${on}"><span class="ck" aria-hidden="true">${on?'✓':''}</span>${p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:''}<span class="t">${esc(p.title)}</span><span class="m">${eur(p.min_price)} · ${p.stock} en stock</span></button>`}).join('')}</div>`;
+  const vm=SD.mode==='video';
+  return `<div class="prods">${SD.results.map(p=>{const on=vm?VD.p?.id===p.id:SD.sel.has(p.id);return `<button class="prod" data-a="${vm?'vdsel':'stsel'}" data-id="${p.id}" aria-pressed="${on}"><span class="ck" aria-hidden="true">${on?'✓':''}</span>${p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:''}<span class="t">${esc(p.title)}</span><span class="m">${eur(p.min_price)} · ${p.stock} en stock</span></button>`}).join('')}</div>`;
 }
 function studioPill(s){return `<span class="pill ${s}">${esc(SJL[s]||s)}</span>`}
 function jobOrder(j){const pr=S.prompts.find(p=>p.id===j.prompt_id);const o=pr?.post_order?.length?pr.post_order:[1,2,3];return o}
@@ -1029,6 +1055,155 @@ async function studioApprove(id,btn){
   await loadTable('posts');
   const np=d.post_ids?.pin?.length||0;const made=np?`post TikTok + ${np} épingles Pinterest créés`:'post brouillon créé';
   toast(d.drive?.done?`Validé : ${made}, photos copiées dans Drive`:`Validé : ${made}`+(S.studioKeys?.drive?' (Drive : échec)':''));
+}
+/* ---------- STUDIO · VIDÉOS IA ---------- */
+const VPH={profil:'Profil',dessus:'Dessus',talon:'Talon',semelle:'Semelle (dessous)',boite:'Boîte fermée'};
+const VJL={images:'Images en cours',images_a_revoir:'Images à valider',clips:'Vidéo en cours',montage:'Montage',a_revoir:'À revoir',valide:'Validée',refuse:'Refusée',erreur:'Erreur'};
+const VD={p:null,shop:null,photos:{},slot:'profil',hands:'homme',busy:false,up:null,poll:null,cut:new Set(),old:false};
+const vtpl=id=>S.vtemplates.find(t=>t.id===(id||'unboxing'))||S.vtemplates[0];
+function viewVideo(){
+  const t=vtpl(),k=S.studioKeys,ready=k?.hf;
+  if(!t)return '<p class="empty">Chargement du modèle de vidéo…</p>';
+  const req=t.required_photos||[],miss=req.filter(x=>!VD.photos[x]);
+  return `<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>La paire</h2><small>${VD.p?esc(VD.p.title):'une seule à la fois'}</small></div>
+     <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
+      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>
+     <div id="st-results">${prodGrid()}</div></section>
+    <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les photos de la paire</h2><small>${req.length-miss.length}/${req.length}</small></div>
+     ${VD.p?`<p class="hint" style="margin:0 0 10px">Cliquez sur une case, puis sur une photo de la fiche ou « Ajouter » pour la remplir. Plus les photos sont nettes, plus la paire sera fidèle.</p>
+      <div class="vslots">${req.map(x=>{const u=VD.photos[x];return `<div class="vslot ${u?'':'miss'}" aria-current="${VD.slot===x}"><button class="vsb" data-a="vdslot" data-v="${x}">${u?`<img src="${esc(u)}" alt="">`:'<span>À ajouter</span>'}</button><b>${VPH[x]||x}</b>
+        <span class="vsa"><label class="linkish">${VD.up===x?'Envoi…':'Ajouter'}<input type="file" accept="image/*" data-vdup="${x}" hidden></label>${u?` · <button class="linkish" data-a="vdclr" data-v="${x}">Retirer</button>`:''}</span></div>`}).join('')}</div>
+      <div class="sechead" style="margin-top:12px"><small>Photos de la fiche · elles vont dans la case « ${VPH[VD.slot]||VD.slot} »</small></div>
+      <div class="refimgs">${VD.shop===null?'<span class="hint">Chargement…</span>':VD.shop.map((u,i)=>`<button class="refimg" data-a="vdpick" data-u="${i}" aria-pressed="${Object.values(VD.photos).includes(u)}"><img src="${esc(u)}" alt="Photo ${i+1}" loading="lazy"><span class="ck" aria-hidden="true">${Object.values(VD.photos).includes(u)?'✓':''}</span></button>`).join('')}</div>`
+     :'<p class="empty">Choisissez d’abord une paire.</p>'}</section>
+     <section class="card"><div class="sechead"><h2><span class="stepn">3</span>Les mains</h2></div>
+      <div class="styles"><label class="style"><input type="radio" name="vdhands" value="homme" ${VD.hands==='homme'?'checked':''}><div><b>Homme</b><span>Ongles courts, sweat gris, sans bijou</span></div></label>
+       <label class="style"><input type="radio" name="vdhands" value="femme" ${VD.hands==='femme'?'checked':''}><div><b>Femme avec vernis</b><span>Vernis assorti à la couleur de la paire</span></div></label></div>
+      <div class="gobar"><span class="hint">${!VD.p?'Choisissez une paire':miss.length?`<span class="warn">Il manque : ${miss.map(x=>VPH[x]||x).join(', ')}</span>`:`${(t.plans||[]).length} images de plans, à valider avant la vidéo`}</span>
+       <button class="btn primary" data-a="vdgo" ${!VD.p||miss.length||!ready||VD.busy?'disabled':''}>${VD.busy?'Lancement…':'Créer les images'}</button></div></section>
+     ${setupCard()}</div></div>`+videosCard();
+}
+function videosCard(){
+  const all=[...S.videos].sort((a,b)=>b.created_at.localeCompare(a.created_at));
+  const list=all.filter(j=>VD.old?j.status==='refuse':j.status!=='refuse'),nr=all.length-all.filter(j=>j.status!=='refuse').length;
+  return `<section class="card"><div class="sechead"><h2><span class="stepn">4</span>Les vidéos</h2>${nr?`<button class="btn sm ${VD.old?'primary':''}" data-a="vdold" aria-pressed="${VD.old}">Refusées <span class="count">${nr}</span></button>`:''}</div>
+   ${list.length?`<div class="jobs">${list.map(videoCard).join('')}</div>`:`<p class="empty">${VD.old?'Aucune vidéo refusée.':'Aucune vidéo pour l’instant.'}</p>`}</section>`;
+}
+function videoCard(j){
+  const t=vtpl(j.template_id),plans=t?.plans||[],F=j.frames||{},C=j.clips||{};
+  const inClips=Object.keys(C).length>0,st=j.status;
+  const canFrame=['images','images_a_revoir'].includes(st)||(st==='erreur'&&!inClips);
+  const canClip=inClips&&['montage','a_revoir','erreur'].includes(st);
+  const tiles=plans.map(p=>{const f=F[p.key]||{},c=C[p.key]||{};let inner,act='';
+    if(c.state==='done')inner=`<video src="${esc(surl(c.path))}" muted loop autoplay playsinline preload="metadata"></video>`;
+    else if(f.state==='done')inner=`<a href="${esc(surl(f.path))}" target="_blank" rel="noopener"><img src="${esc(surl(f.path))}" alt="Plan ${esc(p.title)}" loading="lazy"></a>`+(c.req?'<span class="vov">Vidéo en cours…</span>':c.state==='error'?`<span class="vov err">${esc(c.error||'Échec')}</span>`:'');
+    else if(f.state==='error')inner=`<span class="verr">${esc(f.error||'Échec')}</span>`;
+    else inner=`<span>${f.req?'Image en cours…':p.after&&F[p.after]?.state!=='done'?`Attend le plan « ${esc(plans.find(x=>x.key===p.after)?.title||p.after)} »`:'En attente…'}</span>`;
+    if(canFrame&&!f.req&&(f.state==='done'||f.state==='error'))act=`<button class="btn sm" data-a="vdredo" data-id="${j.id}" data-v="${p.key}">Refaire</button>`;
+    if(canClip&&!c.req&&(c.state==='done'||c.state==='error'))act=`<button class="btn sm" data-a="vdreclip" data-id="${j.id}" data-v="${p.key}">Refaire le clip</button>`;
+    return `<div class="vtile"><div class="shot">${inner}</div><b>${esc(p.title)}</b>${act}</div>`}).join('');
+  let body='';
+  if(st==='images')body='<div class="note">Images en cours : 1 à 3 minutes. Le plan « Profil » part en premier, les autres le copient pour garder la même main.</div>';
+  else if(st==='images_a_revoir'){const ok=plans.every(p=>F[p.key]?.state==='done');
+    body=`<div class="note">${ok?'Vérifiez les images : chaque clip vidéo partira de l’une d’elles. Refaites celles qui ne vont pas, puis lancez la vidéo.':'Refaites les images en échec avant de lancer la vidéo.'}</div>
+     <div class="acts"><button class="btn primary" data-a="vdlaunch" data-id="${j.id}" ${ok?'':'disabled'}>Lancer la vidéo</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`}
+  else if(st==='clips')body='<div class="note">Clips vidéo en cours : 2 à 6 minutes. Vous pouvez quitter la page.</div>';
+  else if(st==='montage')body=`<div class="note">${VD.cut.has(j.id)?'Montage en cours… gardez cet onglet ouvert (environ 15 secondes).':'Les clips sont prêts : il reste à les assembler.'}</div><div class="acts"><button class="btn primary" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>Monter la vidéo</button></div>`;
+  else if(st==='a_revoir')body=`<video class="vfinal" src="${esc(surl(j.video_path))}" controls playsinline preload="metadata"></video>
+     <label class="f">Légende TikTok<textarea id="vj-tt-${j.id}">${esc(j.captions?.tt||'')}</textarea></label>
+     <div class="acts"><button class="btn primary" data-a="vdok" data-id="${j.id}">Valider</button><button class="btn" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>${VD.cut.has(j.id)?'Montage…':'Refaire le montage'}</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
+  else if(st==='valide'){const post=S.posts.find(p=>p.id===j.post_ids?.tt);
+    body=`<video class="vfinal" src="${esc(surl(j.video_path))}" controls playsinline preload="metadata"></video><div class="note ${post?'ok':''}">${post?`TikTok : vidéo en brouillon · ${pill(post.status)}`:'Brouillon supprimé : cliquez sur « Renvoyer dans À planifier » pour le recréer'}</div>
+     <div class="acts"><button class="btn primary" data-a="vdplan" data-id="${j.id}">${post?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button></div>`}
+  else if(st==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="vdretry" data-id="${j.id}">Relancer ce qui a échoué</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
+  return `<article class="job vjob"><header><div><b>${esc(j.product_title)}</b><div class="m">${esc(t?.name||'Vidéo')} · ${j.hands==='femme'?'main de femme':'main d’homme'} · ${ago(j.created_at)}</div></div><span class="pill ${st==='images_a_revoir'?'a_revoir':st}">${esc(VJL[st]||st)}</span></header>
+   <div class="vtiles">${tiles}</div>${body}</article>`;
+}
+async function vdPickProduct(p){
+  VD.p=p;VD.shop=null;VD.photos={};VD.slot='profil';render(true);
+  let imgs=[];try{const r=await sb.functions.invoke('hub-video',{body:{action:'photos',product_id:p.id}});imgs=r.data?.images||[]}catch(e){}
+  if(!imgs.length&&p.image_url)imgs=[p.image_url];
+  if(VD.p?.id!==p.id)return;
+  VD.shop=imgs;
+  // Reprend les photos de la dernière vidéo de cette paire (semelle, boîte…), sinon les 3 premières photos de la fiche
+  const last=[...S.videos].filter(j=>j.product_id===p.id&&j.photos).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0];
+  if(last)VD.photos={...last.photos};else ['profil','dessus','talon'].forEach((k,i)=>{if(imgs[i])VD.photos[k]=imgs[i]});
+  VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||'profil';
+  render(true);
+}
+async function vdUpload(key,f){
+  VD.up=key;render(true);
+  try{const ext=(f.type.split('/')[1]||'jpg').replace('jpeg','jpg');const path=`refs/${crypto.randomUUID()}.${ext}`;
+    const u=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type,cacheControl:'31536000'});if(u.error)throw u.error;
+    VD.photos[key]=surl(path);VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||key}
+  catch(e){toast('Envoi de la photo impossible');console.warn(e)}
+  VD.up=null;render(true);
+}
+document.addEventListener('change',e=>{const k=e.target.dataset?.vdup;if(k&&e.target.files?.[0])vdUpload(k,e.target.files[0]);if(e.target.name==='vdhands')VD.hands=e.target.value});
+async function videoCall(body,btn,okMsg){
+  if(btn)btn.disabled=true;
+  try{const r=await sb.functions.invoke('hub-video',{body});if(r.error){let m=r.error.message;try{m=(await r.error.context.json()).error||m}catch(_){}toast(m);return null}
+    await loadTable('videos');if(okMsg)toast(okMsg);return r.data}
+  catch(e){toast('Pas de réponse, réessayez');return null}
+  finally{if(btn)btn.disabled=false}
+}
+async function videoGo(){
+  if(VD.busy||!VD.p)return;VD.busy=true;render(true);
+  const d=await videoCall({action:'start',template_id:vtpl()?.id,product_id:VD.p.id,photos:VD.photos,hands:VD.hands},null,'Images des plans lancées');
+  VD.busy=false;if(d){VD.p=null;VD.shop=null;VD.photos={}}
+  render(true);
+}
+function videoPoll(){
+  const running=S.videos.filter(j=>['images','clips'].includes(j.status)).map(j=>j.id);
+  clearTimeout(VD.poll);
+  if(running.length&&document.visibilityState==='visible')VD.poll=setTimeout(async()=>{try{await sb.functions.invoke('hub-video',{body:{action:'tick',ids:running}});await loadTable('videos')}catch(e){}videoPoll()},12000);
+  vdAuto();
+}
+// Montage automatique dans l'onglet de la personne qui a lancé la vidéo (une seule tentative par chargement)
+function vdAuto(){if(route!=='studio'||!me)return;S.videos.filter(j=>j.status==='montage'&&j.created_by===me.id&&!VD.cut.has(j.id)&&!VD.cutTried?.has(j.id)).forEach(j=>{(VD.cutTried||=new Set()).add(j.id);setTimeout(()=>videoMontage(j),0)})}
+/* Montage dans le navigateur : clips dans l'ordre du modèle, coupés 0,2 s au début, accélérés, en 1080×1920 sans texte. */
+async function videoMontage(j){
+  if(VD.cut.has(j.id))return;const t=vtpl(j.template_id);if(!t)return;
+  VD.cut.add(j.id);render(true);
+  try{
+    const W=1080,H=1920,fps=30,speed=Number(t.speed)||1.5,cutIn=.2,end=Math.max(1,(t.clip_seconds||4)-.05);
+    const order=(t.montage_order?.length?t.montage_order:(t.plans||[]).map(p=>p.key)).filter(k=>j.clips?.[k]?.path);
+    if(!order.length)throw new Error('Aucun clip à monter.');
+    const vids=await Promise.all(order.map(k=>new Promise((res,rej)=>{const v=document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.playsInline=true;v.preload='auto';
+      v.onloadeddata=()=>res(v);v.onerror=()=>rej(new Error('Clip illisible : '+k));v.src=surl(j.clips[k].path);v.load()})));
+    const types=['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4'];
+    const mime=types.find(x=>window.MediaRecorder&&MediaRecorder.isTypeSupported(x));
+    if(!mime)throw new Error('Ce navigateur ne sait pas créer de vidéo MP4 : utilisez Chrome à jour.');
+    const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+    const draw=v=>{const s=Math.max(W/v.videoWidth,H/v.videoHeight),w=v.videoWidth*s,h=v.videoHeight*s;x.drawImage(v,(W-w)/2,(H-h)/2,w,h)};
+    // Piste son muette (certains réseaux la préfèrent) seulement si le navigateur autorise le son : sinon l'enregistrement se bloquerait
+    const ac=new AudioContext(),osc=ac.createOscillator(),g=ac.createGain(),dst=ac.createMediaStreamDestination();g.gain.value=0;osc.connect(g).connect(dst);osc.start();
+    await Promise.race([ac.resume().catch(()=>{}),new Promise(r=>setTimeout(r,400))]);
+    const stream=new MediaStream([...c.captureStream(fps).getVideoTracks(),...(ac.state==='running'?dst.stream.getAudioTracks():[])]);
+    const rec=new MediaRecorder(stream,{mimeType:ac.state==='running'?mime:mime.split(';')[0],videoBitsPerSecond:8e6});const chunks=[];rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+    const seek=(v,s)=>new Promise(r=>{v.onseeked=()=>{v.onseeked=null;r()};v.currentTime=s});
+    for(let i=0;i<vids.length;i++){const v=vids[i];
+      await seek(v,cutIn);draw(v);
+      if(i===0)rec.start(250);else rec.resume();
+      v.playbackRate=speed;await v.play();
+      const stop=Math.min(end,(v.duration||4)-.05);
+      await new Promise(r=>{const loop=()=>{draw(v);if(v.currentTime>=stop||v.ended){r();return}setTimeout(loop,1000/fps)};loop()});
+      v.pause();if(i<vids.length-1)rec.pause();
+    }
+    await new Promise(r=>{rec.onstop=r;rec.stop()});osc.stop();ac.close();stream.getTracks().forEach(s=>s.stop());
+    const blob=new Blob(chunks,{type:'video/mp4'});
+    const path=`video/${j.id}/final-${Date.now()}.mp4`;
+    const u=await sb.storage.from(BUCKET).upload(path,blob,{contentType:'video/mp4',upsert:true,cacheControl:'31536000'});if(u.error)throw u.error;
+    VD.cut.delete(j.id);
+    await videoCall({action:'set_video',id:j.id,path},null,'Vidéo montée : à revoir');
+  }catch(e){console.warn(e);toast('Montage impossible : '+(e.message||e))}
+  VD.cut.delete(j.id);render(true);
+}
+async function videoApprove(id,btn){
+  const tt=document.getElementById(`vj-tt-${id}`);btn.textContent='Validation…';
+  const d=await videoCall({action:'approve',id,captions:tt?{tt:tt.value}:{}},btn);
+  if(!d){btn.textContent='Valider';return}
+  await loadTable('posts');toast('Validée : vidéo TikTok en brouillon dans « À planifier »');
 }
 document.addEventListener('input',e=>{if(e.target.id==='st-q'){SD.q=e.target.value;clearTimeout(SD.t);SD.t=setTimeout(searchProducts,300)}});
 document.addEventListener('change',e=>{
@@ -1370,6 +1545,22 @@ document.addEventListener('click',async e=>{
   else if(a==='stunsel'){SD.sel.delete(+id);SD.refs.delete(+id);render(true)}
   else if(a==='stref'){const r=SD.refs.get(+id);if(r){const u=r.all[+b.dataset.u];if(r.on.includes(u))r.on=r.on.filter(x=>x!==u);else if(r.on.length<REFMAX)r.on.push(u);else toast(`${REFMAX} photos maximum par paire`);render(true)}}
   else if(a==='stgo')studioGo(b);
+  else if(a==='stmode'){SD.mode=b.dataset.v;render(true);if(SD.mode==='video')videoPoll()}
+  else if(a==='vdsel'){const n=+id;if(VD.p?.id===n){VD.p=null;VD.shop=null;VD.photos={};render(true)}else{const p=(SD.results||[]).find(x=>x.id===n);if(p)vdPickProduct(p)}}
+  else if(a==='vdslot'){VD.slot=b.dataset.v;render(true)}
+  else if(a==='vdpick'){const u=VD.shop?.[+b.dataset.u];if(u){for(const k in VD.photos)if(VD.photos[k]===u&&k!==VD.slot)delete VD.photos[k];VD.photos[VD.slot]=u;VD.slot=(vtpl()?.required_photos||[]).find(k=>!VD.photos[k])||VD.slot;render(true)}}
+  else if(a==='vdclr'){delete VD.photos[b.dataset.v];VD.slot=b.dataset.v;render(true)}
+  else if(a==='vdgo')videoGo();
+  else if(a==='vdold'){VD.old=!VD.old;render(true)}
+  else if(a==='vdredo')videoCall({action:'redo_frame',id,key:b.dataset.v},b,'Image relancée');
+  else if(a==='vdreclip')videoCall({action:'redo_clip',id,key:b.dataset.v},b,'Clip relancé : le montage se refera ensuite');
+  else if(a==='vdlaunch'){b.textContent='Lancement…';videoCall({action:'launch',id},b,'Vidéo lancée : 2 à 6 minutes')}
+  else if(a==='vdretry')videoCall({action:'retry',id},b,'Relancé');
+  else if(a==='vdno')videoCall({action:'reject',id},b,'Vidéo refusée');
+  else if(a==='vdcut'){const j=S.videos.find(x=>x.id===id);if(j){toast('Montage en cours : gardez cet onglet ouvert');videoMontage(j)}}
+  else if(a==='vdok')videoApprove(id,b);
+  else if(a==='vdplan'){const d=await videoCall({action:'toplan',id},b);if(!d)return;await loadTable('posts');
+    HL=new Set([d.post_ids?.tt].filter(Boolean));NF='all';calView='semaine';location.hash='planning';setTimeout(()=>{document.querySelector('.unpl .tilew.hl')?.scrollIntoView({block:'center',behavior:'smooth'})},120);setTimeout(()=>{HL=new Set();if(route==='planning')render(true)},6000)}
   else if(a==='stfilt'){SD.filt=b.dataset.v;render(true)}
   else if(a==='stok')studioApprove(id,b);
   else if(a==='stno')studioCall({action:'reject',id},b,'Carrousel refusé');
@@ -1454,12 +1645,13 @@ async function doLogin(mode){
 }
 
 /* ---------- data ---------- */
-const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net'],settings:['settings','key'],studio:['studio','created_at'],prompts:['prompts','position']};
+const TABLES={posts:['posts','created_at'],ideas:['ideas','created_at'],messages:['messages','created_at'],kpis:['kpis','week'],recaps:['recaps','week'],members:['members','added_at'],connections:['connections','net'],settings:['settings','key'],studio:['studio','created_at'],prompts:['prompts','position'],videos:['video_jobs','created_at'],vtemplates:['video_templates','position']};
 async function loadTable(n){
   const r=await T(TABLES[n][0]).select('*').order(TABLES[n][1]);if(r.error)throw r.error;
   if(n==='kpis'){const o={};r.data.forEach(x=>{(o[x.week]=o[x.week]||{week:x.week})[x.net]={abonnes:x.abonnes,vues:x.vues,interactions:x.interactions,messages:x.messages}});S.kpis=o}
   else S[n]=r.data;
   if(n==='studio')studioPoll();
+  if(n==='videos')videoPoll();
   if(n==='posts'&&draft?.id){const l=S.posts.find(x=>x.id===draft.id);if(l&&(JSON.stringify(l.validations||{})!==JSON.stringify(draft.validations||{})||JSON.stringify(l.published||{})!==JSON.stringify(draft.published||{}))){readEditor();draft.validations=l.validations||{};draft.published=l.published||{};draft.status=l.status;renderEditor()}}
   render();
 }
