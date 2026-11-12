@@ -1046,12 +1046,12 @@ function jobCard(j){
   if(j.status==='a_revoir')body=`<label class="f">Légende TikTok<textarea id="sj-tt-${j.id}" data-jcap="tt" data-id="${j.id}">${esc(cap.tt||'')}</textarea></label>
      <div class="pins"><div class="pinsh"><b>Pinterest : 3 épingles séparées</b><span class="hint">une par photo, chacune avec sa description</span></div>${order.map((n,i)=>{const im=imgs.find(x=>x.n===n);const pv=(cap.pins||[])[i]??(i===0?cap.pin:'')??'';
        return `<div class="pinrow">${im?`<img src="${esc(surl(im.path))}" alt="Épingle ${i+1}">`:'<span></span>'}<label class="f">Épingle ${i+1}<textarea id="sj-pin${i}-${j.id}" data-jcap="pin${i}" data-id="${j.id}" placeholder="Laissez vide : une description sera proposée automatiquement">${esc(pv||'')}</textarea></label></div>`}).join('')}</div>
-     <div class="acts"><button class="btn primary" data-a="stok" data-id="${j.id}">Valider</button><button class="btn" data-a="stretry" data-id="${j.id}">Régénérer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Refuser</button>${S.studioKeys?.ai?`<button class="btn sm ghost" data-a="stcap" data-id="${j.id}">Nouvelles légendes</button>`:''}</div>`;
+     <div class="acts"><button class="btn primary" data-a="stok" data-id="${j.id}">Valider</button><button class="btn" data-a="stretry" data-id="${j.id}">Régénérer</button><button class="btn" data-a="stdl" data-id="${j.id}">${isPhone()?'Enregistrer les photos':'Télécharger les photos'}</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Refuser</button>${S.studioKeys?.ai?`<button class="btn sm ghost" data-a="stcap" data-id="${j.id}">Nouvelles légendes</button>`:''}</div>`;
   else if(j.status==='valide'){const d=j.drive||{},post=S.posts.find(p=>p.id===j.post_id);const pinPosts=(j.post_ids?.pin||[]).map(id=>S.posts.find(p=>p.id===id)).filter(Boolean);
     body=`<div class="note ${post?'ok':''}">${post?`${pinPosts.length?'TikTok : carrousel':'Post brouillon créé'} · ${pill(post.status)}`:'Brouillons supprimés : cliquez sur « Renvoyer dans À planifier » pour les recréer'}</div>
      ${pinPosts.length?`<div class="note ok">Pinterest : ${pinPosts.length} épingles · ${pinPosts.map((p,i)=>`<button class="linkish" data-a="open" data-id="${p.id}">n°${i+1}</button> ${pill(p.status)}`).join(' ')}</div>`:''}
      <div class="note ${d.done?'ok':'err'}">${d.done?`Copié dans Google Drive${d.url?` · <a href="${esc(d.url)}" target="_blank" rel="noopener">ouvrir le dossier</a>`:''}`:`Google Drive : ${esc(d.error||'non copié')}`}</div>
-     <div class="acts"><button class="btn primary" data-a="toplan" data-id="${j.id}">${post||pinPosts.length?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button>${!d.done&&S.studioKeys?.drive?`<button class="btn sm" data-a="stdrive" data-id="${j.id}">Renvoyer vers Drive</button>`:''}</div>`}
+     <div class="acts"><button class="btn primary" data-a="toplan" data-id="${j.id}">${post||pinPosts.length?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button><button class="btn" data-a="stdl" data-id="${j.id}">${isPhone()?'Enregistrer les photos':'Télécharger les photos'}</button>${!d.done&&S.studioKeys?.drive?`<button class="btn sm" data-a="stdrive" data-id="${j.id}">Renvoyer vers Drive</button>`:''}</div>`}
   else if(j.status==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="stretry" data-id="${j.id}">Relancer</button><button class="btn ghost" data-a="stno" data-id="${j.id}">Retirer</button></div>`;
   else if(j.status==='refuse')body=`<div class="acts"><button class="btn sm" data-a="stretry" data-id="${j.id}">Régénérer</button></div>`;
   else body=`<div class="note">Environ 1 à 3 minutes. Vous pouvez quitter la page : la génération continue.</div>`;
@@ -1512,6 +1512,34 @@ async function saveFile(blob,name){
   }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return 'download';
 }
+/* Plusieurs fichiers : sur téléphone, une seule feuille de partage (« Enregistrer N images ») ; sur ordinateur, un .zip. */
+const PENDING={};
+async function saveFiles(list,zipName,btn,key){
+  if(PENDING[key]){const f=PENDING[key];delete PENDING[key];try{await navigator.share({files:f})}catch(e){}return 'shared'}
+  const files=list.map(([b,n])=>new File([b],n,{type:b.type||'image/jpeg'}));
+  if(isPhone()&&navigator.canShare?.({files})){
+    try{await navigator.share({files});return 'shared'}
+    catch(e){if(e.name==='AbortError')return 'cancel';if(e.name==='NotAllowedError'){PENDING[key]=files;return 'retry'}}
+  }
+  if(files.length===1)return saveFile(files[0],files[0].name);
+  const z=new JSZip();files.forEach(f=>z.file(f.name,f));const data=await z.generateAsync({type:'blob'});
+  return saveFile(data,zipName);
+}
+async function studioDownload(id,btn){
+  const j=S.studio.find(x=>x.id===id);if(!j)return;
+  const key='st-'+id;
+  if(PENDING[key]){await saveFiles([],'',btn,key);btn.textContent=isPhone()?'Enregistrer les photos':'Télécharger les photos';return}
+  const imgs=j.images||[],paths=jobOrder(j).map(n=>imgs.find(x=>x.n===n)?.path).filter(Boolean);if(!paths.length)return;
+  const label=btn.textContent;btn.disabled=true;btn.textContent='Préparation…';
+  try{
+    const base=`select-${slug(j.product_title)}`;
+    const list=await Promise.all(paths.map(async(p,i)=>{const b=await (await fetch(surl(p))).blob();return [b,`${base}-${i+1}.${(p.split('.').pop()||'png').toLowerCase()}`]}));
+    const r=await saveFiles(list,base+'.zip',btn,key);
+    if(r==='retry'){btn.disabled=false;btn.textContent='Prêtes : touchez pour enregistrer';return}
+    if(r==='download')toast(isPhone()?'Photos téléchargées : elles sont dans « Fichiers »':'Photos téléchargées');
+  }catch(e){toast('Téléchargement impossible');console.warn(e)}
+  btn.disabled=false;btn.textContent=label;
+}
 async function downloadVis(k,btn){
   readEditor();const V=draft.visuals,fit=draft.fit[k]||'cover';if(!V.length)return;
   const label=btn.textContent;btn.disabled=true;btn.textContent='Préparation…';
@@ -1519,6 +1547,8 @@ async function downloadVis(k,btn){
     const base=`select-${slug(draft.title)}-${NET[k].slug}`;let file,data;
     const one=async v=>isVid(v)?await (await fetch(vurl(v))).blob():await renderVis(v,k,fit,sizeFor(draft,k));
     if(V.length===1){data=await one(V[0]);file=base+(isVid(V[0])?'.'+V[0].path.split('.').pop():'.jpg')}
+    else if(isPhone()){const list=[];for(let i=0;i<V.length;i++)list.push([await one(V[i]),`${base}-${pad(i+1)}.${isVid(V[i])?V[i].path.split('.').pop():'jpg'}`]);
+      const r=await saveFiles(list,base+'.zip',btn,'ed-'+k);if(r==='retry'){const key='ed-'+k;btn.textContent='Prêts : touchez pour enregistrer';btn.disabled=false;btn.onclick=ev=>{ev.stopPropagation();btn.onclick=null;saveFiles([],'',btn,key)};}return}
     else{const z=new JSZip();for(let i=0;i<V.length;i++)z.file(`${pad(i+1)}.${isVid(V[i])?V[i].path.split('.').pop():'jpg'}`,await one(V[i]));data=await z.generateAsync({type:'blob'});file=base+'.zip'}
     const r=await saveFile(data,file);if(r==='download')toast('Visuels téléchargés');else if(r?.retry){const rf=r.retry;btn.textContent='Enregistrer sur le téléphone';btn.disabled=false;btn.onclick=ev=>{ev.stopPropagation();btn.onclick=null;navigator.share({files:[rf]}).catch(()=>{})};return}
   }catch(e){toast('Impossible de préparer les visuels');console.warn(e)}
@@ -1664,6 +1694,7 @@ document.addEventListener('click',async e=>{
   else if(a==='vdcut'){const j=S.videos.find(x=>x.id===id);if(j){toast('Montage en cours : gardez cet onglet ouvert');videoMontage(j)}}
   else if(a==='vdok')videoApprove(id,b);
   else if(a==='vddl')videoDownload(id,b);
+  else if(a==='stdl')studioDownload(id,b);
   else if(a==='vdplan'){const d=await videoCall({action:'toplan',id},b);if(!d)return;await loadTable('posts');
     HL=new Set([d.post_ids?.tt].filter(Boolean));NF='all';calView='semaine';location.hash='planning';setTimeout(()=>{document.querySelector('.unpl .tilew.hl')?.scrollIntoView({block:'center',behavior:'smooth'})},120);setTimeout(()=>{HL=new Set();if(route==='planning')render(true)},6000)}
   else if(a==='stfilt'){SD.filt=b.dataset.v;render(true)}
