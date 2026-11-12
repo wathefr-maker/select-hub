@@ -1124,10 +1124,10 @@ function videoCard(j){
   else if(st==='montage')body=`<div class="note">${VD.cut.has(j.id)?'Montage en cours… gardez cet onglet ouvert (environ 15 secondes).':'Les clips sont prêts : il reste à les assembler.'}</div><div class="acts"><button class="btn primary" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>Monter la vidéo</button></div>`;
   else if(st==='a_revoir')body=`<video class="vfinal" src="${esc(surl(j.video_path))}" controls playsinline preload="metadata"></video>
      <label class="f">Légende TikTok<textarea id="vj-tt-${j.id}">${esc(j.captions?.tt||'')}</textarea></label>
-     <div class="acts"><button class="btn primary" data-a="vdok" data-id="${j.id}">Valider</button><button class="btn" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>${VD.cut.has(j.id)?'Montage…':'Refaire le montage'}</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
+     <div class="acts"><button class="btn primary" data-a="vdok" data-id="${j.id}">Valider</button><button class="btn" data-a="vddl" data-id="${j.id}">${isPhone()?'Enregistrer sur le téléphone':'Télécharger'}</button><button class="btn" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>${VD.cut.has(j.id)?'Montage…':'Refaire le montage'}</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
   else if(st==='valide'){const post=S.posts.find(p=>p.id===j.post_ids?.tt);
     body=`<video class="vfinal" src="${esc(surl(j.video_path))}" controls playsinline preload="metadata"></video><div class="note ${post?'ok':''}">${post?`TikTok : vidéo en brouillon · ${pill(post.status)}`:'Brouillon supprimé : cliquez sur « Renvoyer dans À planifier » pour le recréer'}</div>
-     <div class="acts"><button class="btn primary" data-a="vdplan" data-id="${j.id}">${post?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button><button class="btn" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>${VD.cut.has(j.id)?'Montage…':'Refaire le montage'}</button></div>`}
+     <div class="acts"><button class="btn primary" data-a="vdplan" data-id="${j.id}">${post?'Voir dans « À planifier »':'Renvoyer dans « À planifier »'}</button><button class="btn" data-a="vddl" data-id="${j.id}">${isPhone()?'Enregistrer sur le téléphone':'Télécharger'}</button><button class="btn" data-a="vdcut" data-id="${j.id}" ${VD.cut.has(j.id)?'disabled':''}>${VD.cut.has(j.id)?'Montage…':'Refaire le montage'}</button></div>`}
   else if(st==='erreur')body=`<div class="note err">${esc(j.error||'Erreur')}</div><div class="acts"><button class="btn" data-a="vdretry" data-id="${j.id}">Relancer ce qui a échoué</button><button class="btn ghost" data-a="vdno" data-id="${j.id}">Refuser</button></div>`;
   return `<article class="job vjob"><header><div><b>${esc(j.product_title)}</b><div class="m">${esc(t?.name||'Vidéo')} · ${j.hands==='femme'?'main de femme':'main d’homme'} · ${ago(j.created_at)}</div></div><span class="pill ${st==='images_a_revoir'?'a_revoir':st}">${esc(VJL[st]||st)}</span></header>
    <div class="vtiles">${tiles}</div>${canFrame?photosStrip(j):''}${body}</article>`;
@@ -1245,6 +1245,19 @@ async function videoMontage(j){
     if(j.status==='valide')await loadTable('posts');
   }catch(e){console.warn(e);toast('Montage impossible : '+(e.message||e))}
   VD.cut.delete(j.id);render(true);
+}
+const VDL={};
+async function videoDownload(id,btn){
+  const j=S.videos.find(x=>x.id===id);if(!j?.video_path)return;
+  if(VDL[id]){const f=VDL[id];delete VDL[id];try{await navigator.share({files:[f]})}catch(e){}btn.textContent='Enregistrer sur le téléphone';return}
+  const label=btn.textContent;btn.disabled=true;btn.textContent='Préparation…';
+  try{
+    const blob=await (await fetch(surl(j.video_path))).blob();
+    const r=await saveFile(blob,`select-${slug(j.product_title)}-unboxing.mp4`);
+    if(r?.retry){VDL[id]=r.retry;btn.disabled=false;btn.textContent='Prête : touchez pour enregistrer';return}
+    if(r==='download')toast(isPhone()?'Vidéo téléchargée : elle est dans « Fichiers »':'Vidéo téléchargée');
+  }catch(e){toast('Téléchargement impossible');console.warn(e)}
+  btn.disabled=false;btn.textContent=label;
 }
 async function videoApprove(id,btn){
   const tt=document.getElementById(`vj-tt-${id}`);btn.textContent='Validation…';
@@ -1461,6 +1474,16 @@ async function renderVis(v,k,fit,size){
   return new Promise((r,j)=>c.toBlob(b=>b?r(b):j(new Error('canvas')),'image/jpeg',0.92));
 }
 const slug=s=>(s||'post').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'post';
+/* Enregistrer un fichier : sur téléphone, la feuille de partage (« Enregistrer la vidéo » range dans Photos) ; sur ordinateur, un téléchargement classique. */
+const isPhone=()=>matchMedia('(pointer:coarse)').matches;
+async function saveFile(blob,name){
+  const file=new File([blob],name,{type:blob.type||(name.endsWith('.mp4')?'video/mp4':'application/octet-stream')});
+  if(isPhone()&&navigator.canShare?.({files:[file]})){
+    try{await navigator.share({files:[file]});return 'shared'}
+    catch(e){if(e.name==='AbortError')return 'cancel';if(e.name==='NotAllowedError')return {retry:file};}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return 'download';
+}
 async function downloadVis(k,btn){
   readEditor();const V=draft.visuals,fit=draft.fit[k]||'cover';if(!V.length)return;
   const label=btn.textContent;btn.disabled=true;btn.textContent='Préparation…';
@@ -1469,9 +1492,9 @@ async function downloadVis(k,btn){
     const one=async v=>isVid(v)?await (await fetch(vurl(v))).blob():await renderVis(v,k,fit,sizeFor(draft,k));
     if(V.length===1){data=await one(V[0]);file=base+(isVid(V[0])?'.'+V[0].path.split('.').pop():'.jpg')}
     else{const z=new JSZip();for(let i=0;i<V.length;i++)z.file(`${pad(i+1)}.${isVid(V[i])?V[i].path.split('.').pop():'jpg'}`,await one(V[i]));data=await z.generateAsync({type:'blob'});file=base+'.zip'}
-    const a=document.createElement('a');a.href=URL.createObjectURL(data);a.download=file;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast('Visuels téléchargés');
+    const r=await saveFile(data,file);if(r==='download')toast('Visuels téléchargés');else if(r?.retry){const rf=r.retry;btn.textContent='Enregistrer sur le téléphone';btn.disabled=false;btn.onclick=ev=>{ev.stopPropagation();btn.onclick=null;navigator.share({files:[rf]}).catch(()=>{})};return}
   }catch(e){toast('Impossible de préparer les visuels');console.warn(e)}
-  finally{btn.disabled=false;btn.textContent=label}
+  finally{if(!btn.onclick){btn.disabled=false;btn.textContent=label}}
 }
 async function uploadFiles(files){
   readEditor();const okT=['image/jpeg','image/png','image/webp','video/mp4','video/quicktime'];let added=0;
@@ -1610,6 +1633,7 @@ document.addEventListener('click',async e=>{
   else if(a==='vdno')videoCall({action:'reject',id},b,'Vidéo refusée');
   else if(a==='vdcut'){const j=S.videos.find(x=>x.id===id);if(j){toast('Montage en cours : gardez cet onglet ouvert');videoMontage(j)}}
   else if(a==='vdok')videoApprove(id,b);
+  else if(a==='vddl')videoDownload(id,b);
   else if(a==='vdplan'){const d=await videoCall({action:'toplan',id},b);if(!d)return;await loadTable('posts');
     HL=new Set([d.post_ids?.tt].filter(Boolean));NF='all';calView='semaine';location.hash='planning';setTimeout(()=>{document.querySelector('.unpl .tilew.hl')?.scrollIntoView({block:'center',behavior:'smooth'})},120);setTimeout(()=>{HL=new Set();if(route==='planning')render(true)},6000)}
   else if(a==='stfilt'){SD.filt=b.dataset.v;render(true)}
