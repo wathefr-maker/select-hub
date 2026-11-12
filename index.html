@@ -367,6 +367,10 @@ details.adv .advin{display:grid;gap:12px;padding-bottom:14px}
 .jobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
 .seg.big button{padding:7px 14px;font-size:13px}
 .pagehead .seg{align-self:flex-start}
+.cchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.cchip{border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.cchip[aria-pressed="true"]{border-color:var(--accent);color:var(--ink);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.prodfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
 .vslots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px}
 .vslot{display:grid;gap:4px;justify-items:center;text-align:center;font-size:12px}
 .vslot b{font-size:12px;font-weight:600}
@@ -928,7 +932,7 @@ document.addEventListener('drop',e=>{const d=e.target.closest?.('[data-day]');if
 /* ---------- STUDIO ---------- */
 const SJ=[['a_revoir','À revoir'],['en_cours','En cours'],['valide','Validés'],['refuse','Refusés']];
 const SJL={en_cours:'En cours',a_revoir:'À revoir',valide:'Validé',refuse:'Refusé',erreur:'Erreur'};
-const SD={q:'',stock:true,results:null,sel:new Map(),styles:new Set(['produit']),refs:new Map(),filt:'a_revoir',busy:false,t:null,poll:null};
+const SD={coll:'',lim:48,total:null,more:false,q:'',stock:true,results:null,sel:new Map(),styles:new Set(['produit']),refs:new Map(),filt:'a_revoir',busy:false,t:null,poll:null};
 const surl=path=>sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 const eur=n=>n==null?'':Number(n).toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
 async function studioStatus(){try{const r=await sb.functions.invoke('hub-studio',{body:{action:'status'}});if(!r.error){S.studioKeys=r.data;if(route==='studio')render()}}catch(e){}}
@@ -945,7 +949,7 @@ function viewStudio(){
    +(k&&!ready?`<div class="banner">La génération n’est pas encore branchée : il manque la clé Higgsfield API dans Supabase. Vous pouvez déjà préparer votre sélection.</div>`:'')
    +`<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>Les paires</h2><small>${SD.sel.size} choisie${SD.sel.size>1?'s':''}</small></div>
      <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
-      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>
+      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>${collChips()}
      ${refsPanel()}
      <div id="st-results">${prodGrid()}</div></section>
     <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les styles</h2><small>validés ensemble</small></div>
@@ -989,21 +993,45 @@ function setupCard(){
    ${row(k.ai,'Descriptions des posts','Rédigées par IA','Modèle de texte')}
    ${row(k.drive,'Copie Google Drive','Branchée','À brancher')}</div></section>`;
 }
-async function searchProducts(){
-  const q=SD.q.trim();
-  let r=sb.from('products').select(SD.stock?'id,title,handle,image_url,min_price,variants!inner(inventory_quantity)':'id,title,handle,image_url,min_price,variants(inventory_quantity)').order('updated_at',{ascending:false}).limit(30);
+/* Collections de la boutique proposées en filtre (lues sur le site, qui autorise ces appels) */
+const SHOP_URL='https://shop.selectbythibaud.com';
+const COLLS=[['','Tout le catalogue'],['nouveautes','Nouveautés']];
+const COLL_CACHE={};
+function collChips(){return `<div class="cchips" role="group" aria-label="Collection">${COLLS.map(([h,l])=>`<button class="cchip" data-a="stcoll" data-v="${h}" aria-pressed="${SD.coll===h}">${l}</button>`).join('')}</div>`}
+async function collHandles(h){
+  if(COLL_CACHE[h])return COLL_CACHE[h];
+  const out=[];for(let page=1;page<=10;page++){const r=await fetch(`${SHOP_URL}/collections/${encodeURIComponent(h)}/products.json?limit=250&page=${page}`);if(!r.ok)throw new Error('collection '+r.status);
+    const d=await r.json();(d.products||[]).forEach(p=>out.push(p.handle));if((d.products||[]).length<250)break}
+  return COLL_CACHE[h]=out;
+}
+async function searchProducts(more){
+  if(!more)SD.lim=48;
+  const q=SD.q.trim(),tag=++SD.seq||(SD.seq=1);
+  const cols=SD.stock?'id,title,handle,image_url,min_price,variants!inner(inventory_quantity)':'id,title,handle,image_url,min_price,variants(inventory_quantity)';
+  let r=sb.from('products').select(cols,{count:'exact'});
+  let order=null;
+  if(SD.coll){try{order=await collHandles(SD.coll)}catch(e){toast('Collection illisible sur le site');order=[]}r=r.in('handle',order.length?order:['-'])}
+  else r=r.order('updated_at',{ascending:false});
+  r=r.limit(SD.coll?250:SD.lim);
   if(SD.stock)r=r.gt('variants.inventory_quantity',0);
   q.split(/\s+/).filter(Boolean).forEach(w=>{r=r.ilike('title',`%${w.replace(/[%_,()]/g,'')}%`)});
   const res=await r;
+  if(tag!==SD.seq)return;
   if(res.error){SD.results=[];toast('Recherche impossible');console.warn(res.error)}
-  else SD.results=res.data.map(p=>({...p,stock:(p.variants||[]).reduce((a,v)=>a+Math.max(0,v.inventory_quantity||0),0)}));
+  else{
+    let list=res.data.map(p=>({...p,stock:(p.variants||[]).reduce((a,v)=>a+Math.max(0,v.inventory_quantity||0),0)}));
+    if(order){const ix=new Map(order.map((h,i)=>[h,i]));list.sort((a,b)=>(ix.get(a.handle)??1e9)-(ix.get(b.handle)??1e9))}
+    SD.results=list;SD.total=typeof res.count==='number'?res.count:null;
+  }
   const el=$('#st-results');if(el)el.innerHTML=prodGrid();
 }
 function prodGrid(){
   if(SD.results===null){setTimeout(searchProducts,0);return '<p class="empty">Chargement du catalogue…</p>'}
-  if(!SD.results.length)return `<p class="empty">Aucune paire ${SD.stock?'en stock ':''}ne correspond.</p>`;
+  if(!SD.results.length)return `<p class="empty">Aucune paire ${SD.stock?'en stock ':''}ne correspond${SD.coll?' dans cette collection':''}.</p>`;
+  const tot=SD.total,shown=SD.results.length,moreBtn=!SD.coll&&tot!=null&&tot>shown;
+  const foot=`<div class="prodfoot"><span class="hint">${tot!=null?`${shown} sur ${tot} paire${tot>1?'s':''}${SD.stock?' en stock':''}`:`${shown} paires`}${!SD.coll&&!SD.q.trim()&&moreBtn?' · tapez un nom pour trouver une paire précise':''}</span>${moreBtn?`<button class="btn sm" data-a="stmore">Voir plus</button>`:''}</div>`;
   const vm=SD.mode==='video';
-  return `<div class="prods">${SD.results.map(p=>{const on=vm?VD.p?.id===p.id:SD.sel.has(p.id);return `<button class="prod" data-a="${vm?'vdsel':'stsel'}" data-id="${p.id}" aria-pressed="${on}"><span class="ck" aria-hidden="true">${on?'✓':''}</span>${p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:''}<span class="t">${esc(p.title)}</span><span class="m">${eur(p.min_price)} · ${p.stock} en stock</span></button>`}).join('')}</div>`;
+  return `<div class="prods">${SD.results.map(p=>{const on=vm?VD.p?.id===p.id:SD.sel.has(p.id);return `<button class="prod" data-a="${vm?'vdsel':'stsel'}" data-id="${p.id}" aria-pressed="${on}"><span class="ck" aria-hidden="true">${on?'✓':''}</span>${p.image_url?`<img src="${esc(p.image_url)}" alt="" loading="lazy">`:''}<span class="t">${esc(p.title)}</span><span class="m">${eur(p.min_price)} · ${p.stock} en stock</span></button>`}).join('')}</div>`+foot;
 }
 function studioPill(s){return `<span class="pill ${s}">${esc(SJL[s]||s)}</span>`}
 function jobOrder(j){const pr=S.prompts.find(p=>p.id===j.prompt_id);const o=pr?.post_order?.length?pr.post_order:[1,2,3];return o}
@@ -1077,7 +1105,7 @@ function viewVideo(){
   const req=t.required_photos||[],miss=req.filter(x=>!VD.photos[x]);
   return `<div class="steps"><section class="card"><div class="sechead"><h2><span class="stepn">1</span>La paire</h2><small>${VD.p?esc(VD.p.title):'une seule à la fois'}</small></div>
      <div class="search"><input type="text" id="st-q" placeholder="Rechercher dans la boutique : Samba, SL 72, New Balance…" value="${esc(SD.q)}" autocomplete="off" aria-label="Rechercher une paire">
-      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>
+      <label class="check"><input type="checkbox" id="st-stock" ${SD.stock?'checked':''}>En stock</label></div>${collChips()}
      <div id="st-results">${prodGrid()}</div></section>
     <div class="stack"><section class="card"><div class="sechead"><h2><span class="stepn">2</span>Les photos de la paire</h2><small>${req.length-miss.length}/${req.length}</small></div>
      ${VD.p?`<p class="hint" style="margin:0 0 10px">Cliquez sur une case, puis sur une photo de la fiche ou « Ajouter » pour la remplir. Plus les photos sont nettes, plus la paire sera fidèle.</p>
@@ -1615,6 +1643,8 @@ document.addEventListener('click',async e=>{
   else if(a==='stunsel'){SD.sel.delete(+id);SD.refs.delete(+id);render(true)}
   else if(a==='stref'){const r=SD.refs.get(+id);if(r){const u=r.all[+b.dataset.u];if(r.on.includes(u))r.on=r.on.filter(x=>x!==u);else if(r.on.length<REFMAX)r.on.push(u);else toast(`${REFMAX} photos maximum par paire`);render(true)}}
   else if(a==='stgo')studioGo(b);
+  else if(a==='stcoll'){SD.coll=b.dataset.v;SD.results=null;render(true)}
+  else if(a==='stmore'){SD.lim+=48;b.disabled=true;b.textContent='Chargement…';searchProducts(true)}
   else if(a==='stmode'){SD.mode=b.dataset.v;render(true);if(SD.mode==='video')videoPoll()}
   else if(a==='vdsel'){const n=+id;if(VD.p?.id===n){VD.p=null;VD.shop=null;VD.photos={};render(true)}else{const p=(SD.results||[]).find(x=>x.id===n);if(p)vdPickProduct(p)}}
   else if(a==='vdslot'){VD.slot=b.dataset.v;render(true)}
