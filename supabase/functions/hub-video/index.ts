@@ -354,7 +354,18 @@ Deno.serve(async (req) => {
     if (body.action === "set_video") {
       const path = String(body.path || "");
       if (!path.startsWith(`video/${job.id}/`) || !/\.(mp4|webm)$/.test(path)) return json({ error: "Fichier vidéo invalide." }, 400);
-      if (!["montage", "a_revoir"].includes(job.status)) return json({ error: "Cette vidéo n'est pas à l'étape du montage." }, 400);
+      if (!["montage", "a_revoir", "valide"].includes(job.status)) return json({ error: "Cette vidéo n'est pas à l'étape du montage." }, 400);
+      if (job.status === "valide") {
+        // Vidéo déjà validée : on remplace le fichier du brouillon TikTok et on efface son envoi pour qu'il reparte
+        const { data: post } = job.post_ids?.tt ? await admin.from("hub_posts").select("id,published,rendered").eq("id", job.post_ids.tt).maybeSingle() : { data: null };
+        if (post) {
+          const published = { ...(post.published || {}) }; delete published.tt;
+          const rendered = { ...(post.rendered || {}) }; delete rendered.tt;
+          await admin.from("hub_posts").update({ visuals: [{ path, name: `${job.product_title} unboxing` }], published, rendered, updated_at: nowIso() }).eq("id", post.id);
+        }
+        await admin.from("hub_video_jobs").update({ video_path: path, updated_at: nowIso() }).eq("id", job.id);
+        return json({ ok: true });
+      }
       const caps = job.captions?.tt ? job.captions : { tt: caption(job) };
       await admin.from("hub_video_jobs").update({ video_path: path, status: "a_revoir", captions: caps, updated_at: nowIso() }).eq("id", job.id);
       return json({ ok: true });
